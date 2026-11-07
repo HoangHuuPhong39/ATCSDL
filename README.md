@@ -67,6 +67,7 @@ sqloracle/
 │   ├── bridge.py                # Cầu nối phân tích kiểm toán, tính Risk Score & IPS
 │   ├── requirements.txt         # Thư viện Python (oracledb)
 │   ├── SYS_FREEPDB1.sql         # Script khởi tạo Schema, Bẫy FGA, Triggers, Users
+│   ├── DEMO_ALL_ATTACKS.sql     # 🔥 Bộ lệnh Demo toàn diện: Tấn công Kỹ thuật & Tấn công Suy diễn SDB
 │   ├── DEMO_COMMANDS.sql        # Bộ lệnh mẫu thực thi các bài test tấn công
 │   ├── User_U1.sql / User_U4.sql# Script hỗ trợ phân quyền kiểm thử
 │   └── run_bridge.bat           # Script khởi động riêng Python Bridge
