@@ -1,0 +1,6 @@
+{
+  "name": "Oracle DB-IDS & Active IPS - Giám sát An toàn CSDL",
+  "description": "Hệ thống phát hiện xâm nhập và phòng thủ chủ động đa cấp (IDS/IPS) cho Oracle Database: Bẫy Honeytoken, DBMS_FGA, Autonomous Trigger, Phân tích suy diễn thống kê & Chấm điểm rủi ro",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

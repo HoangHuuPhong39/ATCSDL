@@ -1,0 +1,106 @@
+@import "tailwindcss";
+
+:root {
+  --bg-canvas: #090e17;
+  --bg-surface: #0e1626;
+  --bg-surface-elevated: #131e33;
+  --bg-card: #101b2e;
+  --bg-card-hover: #15233c;
+  --bg-input: #0b1322;
+  --bg-row-hover: rgba(30, 48, 80, 0.35);
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border: rgba(56, 189, 248, 0.14);
+  --border-hover: rgba(56, 189, 248, 0.3);
+  --border-accent: #0284c7;
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-accent: #38bdf8;
+
+  --accent-blue: #0ea5e9;
+  --accent-blue-soft: rgba(14, 165, 233, 0.12);
+  --accent-purple: #8b5cf6;
+  --accent-purple-soft: rgba(139, 92, 246, 0.12);
+
+  --crit-red: #ef4444;
+  --crit-soft: rgba(239, 68, 68, 0.12);
+  --crit-border: rgba(239, 68, 68, 0.35);
+
+  --high-orange: #f97316;
+  --high-soft: rgba(249, 115, 22, 0.12);
+  --high-border: rgba(249, 115, 22, 0.35);
+
+  --med-yellow: #eab308;
+  --med-soft: rgba(234, 179, 8, 0.12);
+  --med-border: rgba(234, 179, 8, 0.35);
+
+  --safe-green: #10b981;
+  --safe-soft: rgba(16, 185, 129, 0.12);
+  --safe-border: rgba(16, 185, 129, 0.35);
+}
+
+body {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #090e17;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(56, 189, 248, 0.2);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(56, 189, 248, 0.4);
+}
+
+/* Honeytoken Canary Glowing row animation */
+@keyframes canaryPulse {
+  0%, 100% {
+    background-color: rgba(239, 68, 68, 0.08);
+  }
+  50% {
+    background-color: rgba(239, 68, 68, 0.16);
+  }
+}
+
+.honeytoken-row {
+  animation: canaryPulse 3s ease-in-out infinite;
+}
+
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin-active {
+  animation: spinSlow 0.8s linear infinite;
+}
+
+/* Density modes */
+.density-compact table th,
+.density-compact table td {
+  padding-top: 0.4rem !important;
+  padding-bottom: 0.4rem !important;
+}

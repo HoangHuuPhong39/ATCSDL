@@ -1,0 +1,5 @@
+UPDATE SYS.NV SET luong = 5000 WHERE manv = 'NV1';
+
+DELETE FROM SYS.NV WHERE manv = 'NV2';
+
+SELECT * FROM SYS.NV WHERE manv = 'NV1' OR 1=1;

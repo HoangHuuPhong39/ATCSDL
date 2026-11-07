@@ -1,0 +1,2607 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Oracle DB-IDS | Defense-in-Depth &amp; Active IPS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ==========================================================================
+       MINIMALIST CYBERSECURITY SOC DESIGN SYSTEM
+       Dark Navy + Clean Blue Accents + Flat Crisp Surfaces
+       ========================================================================== */
+    :root {
+      /* Backgrounds */
+      --bg-canvas: #090e17;
+      --bg-surface: #0e1626;
+      --bg-surface-elevated: #131e33;
+      --bg-card: #101b2e;
+      --bg-card-hover: #15233c;
+      --bg-input: #0b1322;
+      --bg-row-hover: rgba(30, 48, 80, 0.35);
+
+      /* Borders */
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --border: rgba(56, 189, 248, 0.14);
+      --border-hover: rgba(56, 189, 248, 0.3);
+      --border-accent: #0284c7;
+
+      /* Typography */
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --text-accent: #38bdf8;
+
+      /* Accents */
+      --accent-blue: #0ea5e9;
+      --accent-blue-soft: rgba(14, 165, 233, 0.12);
+      --accent-purple: #8b5cf6;
+      --accent-purple-soft: rgba(139, 92, 246, 0.12);
+
+      /* Severity Colors */
+      --crit-red: #ef4444;
+      --crit-soft: rgba(239, 68, 68, 0.12);
+      --crit-border: rgba(239, 68, 68, 0.35);
+
+      --high-orange: #f97316;
+      --high-soft: rgba(249, 115, 22, 0.12);
+      --high-border: rgba(249, 115, 22, 0.35);
+
+      --med-yellow: #eab308;
+      --med-soft: rgba(234, 179, 8, 0.12);
+      --med-border: rgba(234, 179, 8, 0.35);
+
+      --safe-green: #10b981;
+      --safe-soft: rgba(16, 185, 129, 0.12);
+      --safe-border: rgba(16, 185, 129, 0.35);
+
+      /* Geometry */
+      --radius-lg: 10px;
+      --radius-md: 8px;
+      --radius-sm: 6px;
+      --radius-pill: 999px;
+      --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-canvas);
+      color: var(--text-primary);
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+      display: flex;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-canvas);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(56, 189, 248, 0.2);
+      border-radius: var(--radius-pill);
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(56, 189, 248, 0.4);
+    }
+
+    /* ==========================================================================
+       1. SIDEBAR (MINIMALIST & CLEAN)
+       ========================================================================== */
+    .sidebar {
+      width: 260px;
+      background-color: var(--bg-surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 50;
+      overflow-y: auto;
+    }
+
+    .brand {
+      padding: 20px 18px 18px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-logo-wrap {
+      width: 38px;
+      height: 38px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.2) 0%, rgba(2, 132, 199, 0.4) 100%);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #38bdf8;
+      flex-shrink: 0;
+    }
+    .brand-logo-wrap svg {
+      width: 20px;
+      height: 20px;
+    }
+    .brand-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+    .brand-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .nav-section {
+      padding: 14px 10px;
+      flex: 1;
+    }
+    .nav-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 12px;
+      border-radius: var(--radius-md);
+      color: var(--text-secondary);
+      font-weight: 600;
+      font-size: 12.5px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+      border: 1px solid transparent;
+    }
+    .nav-item-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .nav-logo {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .nav-logo svg {
+      width: 17px;
+      height: 17px;
+      stroke-width: 2;
+    }
+    .nav-item:hover {
+      background-color: var(--bg-surface-elevated);
+      color: var(--text-primary);
+    }
+    .nav-item:hover .nav-logo {
+      color: var(--text-accent);
+    }
+    .nav-item.active {
+      background-color: #0284c7;
+      color: #ffffff;
+      border-color: #38bdf8;
+    }
+    .nav-item.active .nav-logo {
+      color: #ffffff;
+    }
+
+    .nav-badge {
+      font-size: 10.5px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 1px 6px;
+      border-radius: var(--radius-pill);
+      background: var(--crit-soft);
+      color: #fca5a5;
+      border: 1px solid var(--crit-border);
+    }
+    .nav-badge.orange {
+      background: var(--high-soft);
+      color: #fdba74;
+      border-color: var(--high-border);
+    }
+    .nav-badge.purple {
+      background: var(--accent-purple-soft);
+      color: #d8b4fe;
+      border-color: rgba(139, 92, 246, 0.35);
+    }
+    .nav-badge.blue {
+      background: var(--accent-blue-soft);
+      color: #7dd3fc;
+      border-color: rgba(14, 165, 233, 0.35);
+    }
+
+    /* Sidebar Footer Status (Minimalist matching reference image) */
+    .sidebar-footer {
+      padding: 16px 18px;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .pulse-dot-large {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--safe-green);
+      box-shadow: 0 0 10px var(--safe-green);
+      flex-shrink: 0;
+    }
+    .footer-status-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .footer-status-sub {
+      font-size: 11px;
+      color: var(--safe-green);
+      font-weight: 600;
+    }
+
+    /* ==========================================================================
+       2. HEADER / TOPBAR
+       ========================================================================== */
+    .main {
+      margin-left: 260px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .topbar {
+      height: 64px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .pulse-wave-icon {
+      color: var(--accent-blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .pulse-wave-icon svg {
+      width: 24px;
+      height: 24px;
+    }
+    .topbar-title h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.01em;
+    }
+    .topbar-title p {
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-top: 1px;
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .conn-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 12px;
+      border-radius: var(--radius-pill);
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .status-dot-sm {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--safe-green);
+      box-shadow: 0 0 6px var(--safe-green);
+    }
+    .status-dot-sm.offline {
+      background: var(--crit-red);
+      box-shadow: 0 0 6px var(--crit-red);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg-surface-elevated);
+      color: var(--text-primary);
+      transition: all 0.15s ease;
+      font-family: inherit;
+      white-space: nowrap;
+      user-select: none;
+    }
+    .btn svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+    }
+    .btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-hover);
+    }
+    .btn-primary {
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #ffffff;
+    }
+    .btn-primary:hover {
+      background: #0369a1;
+    }
+    .btn-danger-outline {
+      background: transparent;
+      border-color: var(--crit-border);
+      color: #fca5a5;
+    }
+    .btn-danger-outline:hover {
+      background: var(--crit-soft);
+      border-color: var(--crit-red);
+    }
+    .btn-warning-outline {
+      background: transparent;
+      border-color: var(--high-border);
+      color: #fdba74;
+    }
+    .btn-warning-outline:hover {
+      background: var(--high-soft);
+      border-color: var(--high-orange);
+    }
+    .btn-sm {
+      padding: 4px 10px;
+      font-size: 11px;
+      border-radius: var(--radius-sm);
+    }
+
+    /* Content Area */
+    .content {
+      padding: 20px 24px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* ==========================================================================
+       3. KPI CARDS (MATCHING REFERENCE IMAGE)
+       ========================================================================== */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: var(--shadow-card);
+      position: relative;
+    }
+    .kpi-top {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .kpi-icon-pill {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .kpi-blue .kpi-icon-pill {
+      background: var(--accent-blue-soft);
+      color: var(--accent-blue);
+      border: 1px solid rgba(14, 165, 233, 0.25);
+    }
+    .kpi-red .kpi-icon-pill {
+      background: var(--crit-soft);
+      color: var(--crit-red);
+      border: 1px solid var(--crit-border);
+    }
+    .kpi-yellow .kpi-icon-pill {
+      background: var(--high-soft);
+      color: var(--high-orange);
+      border: 1px solid var(--high-border);
+    }
+    .kpi-purple .kpi-icon-pill {
+      background: var(--accent-purple-soft);
+      color: var(--accent-purple);
+      border: 1px solid rgba(139, 92, 246, 0.25);
+    }
+    .kpi-icon-pill svg {
+      width: 17px;
+      height: 17px;
+    }
+    .kpi-title {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    .kpi-body {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-top: 14px;
+    }
+    .kpi-stat-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .kpi-number {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--text-primary);
+      font-family: 'JetBrains Mono', monospace;
+      line-height: 1.1;
+    }
+    .kpi-subtext {
+      font-size: 11px;
+      margin-top: 6px;
+      font-weight: 600;
+    }
+    .kpi-subtext.green { color: var(--safe-green); }
+    .kpi-subtext.red { color: var(--crit-red); }
+    .kpi-subtext.yellow { color: var(--high-orange); }
+    .kpi-subtext.muted { color: var(--text-muted); }
+
+    .kpi-chart-wrap {
+      width: 65px;
+      height: 34px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+      flex-shrink: 0;
+    }
+
+    /* ==========================================================================
+       4. CARDS, TABLES & SECTIONS
+       ========================================================================== */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .card-header {
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(14, 22, 38, 0.4);
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .card-title-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .card-header-icon {
+      color: var(--accent-blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .card-header-icon.red { color: var(--crit-red); }
+    .card-header-icon.yellow { color: var(--high-orange); }
+    .card-header-icon.purple { color: var(--accent-purple); }
+    .card-header-icon svg {
+      width: 17px;
+      height: 17px;
+    }
+    .card-title-text {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .card-subtitle-text {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .card-tools {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .card-link {
+      font-size: 12px;
+      color: var(--text-accent);
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: color 0.15s ease;
+    }
+    .card-link:hover {
+      color: #ffffff;
+      text-decoration: underline;
+    }
+
+    .search-input {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      padding: 6px 12px;
+      font-size: 11.5px;
+      outline: none;
+      width: 220px;
+      font-family: inherit;
+      transition: border-color 0.15s ease;
+    }
+    .search-input:focus {
+      border-color: var(--border-accent);
+    }
+
+    /* Tables */
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      max-height: 480px;
+      overflow-y: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      background: #0b1322;
+      color: var(--text-muted);
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      z-index: 10;
+      white-space: nowrap;
+    }
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 12px;
+      color: var(--text-primary);
+      vertical-align: middle;
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+    tbody tr:hover {
+      background-color: var(--bg-row-hover);
+    }
+    tbody tr.clickable-row {
+      cursor: pointer;
+    }
+    tbody tr.honeytoken-row {
+      background-color: rgba(239, 68, 68, 0.08);
+    }
+    tbody tr.honeytoken-row:hover {
+      background-color: rgba(239, 68, 68, 0.15);
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', Consolas, monospace;
+      font-size: 11.5px;
+      white-space: nowrap;
+    }
+    .sql-code {
+      font-family: 'JetBrains Mono', Consolas, monospace;
+      font-size: 11px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      padding: 2px 7px;
+      border-radius: 4px;
+      color: #7dd3fc;
+      display: inline-block;
+      max-width: 320px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      font-size: 10.5px;
+      font-weight: 700;
+      white-space: nowrap;
+      letter-spacing: 0.02em;
+    }
+    .badge-critical {
+      background: transparent;
+      color: #fca5a5;
+      border: 1px solid var(--crit-red);
+    }
+    .badge-high {
+      background: transparent;
+      color: #fdba74;
+      border: 1px solid var(--high-orange);
+    }
+    .badge-medium {
+      background: transparent;
+      color: #fde047;
+      border: 1px solid var(--med-yellow);
+    }
+    .badge-success {
+      background: transparent;
+      color: #6ee7b7;
+      border: 1px solid var(--safe-green);
+    }
+    .badge-neutral {
+      background: var(--bg-surface-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+    }
+
+    /* Risk Score Indicator */
+    .risk-inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .risk-score-text {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      min-width: 44px;
+    }
+    .risk-bar-track {
+      width: 45px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: var(--radius-pill);
+      overflow: hidden;
+    }
+    .risk-bar-prog {
+      height: 100%;
+      border-radius: var(--radius-pill);
+    }
+
+    /* 2-column grid for overview bottom */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* Empty state */
+    .empty-state {
+      padding: 32px 18px;
+      text-align: center;
+      color: var(--text-secondary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      font-size: 12.5px;
+    }
+    .empty-state svg {
+      width: 28px;
+      height: 28px;
+      color: var(--safe-green);
+    }
+
+    /* Dedicated Tab Container Controls */
+    .tab-view {
+      display: none;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .tab-view.active {
+      display: flex;
+    }
+
+    /* Filter buttons */
+    .filter-group {
+      display: flex;
+      align-items: center;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 2px;
+      gap: 2px;
+    }
+    .filter-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      padding: 4px 9px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .filter-btn:hover { color: var(--text-primary); }
+    .filter-btn.active {
+      background: rgba(56, 189, 248, 0.18);
+      color: var(--text-accent);
+    }
+
+    /* ==========================================================================
+       5. MODAL & TOAST NOTIFICATIONS
+       ========================================================================== */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 7, 15, 0.8);
+      backdrop-filter: blur(4px);
+      z-index: 150;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-backdrop.open {
+      display: flex;
+    }
+    .modal-box {
+      background: #0f192b;
+      border: 1px solid var(--border-hover);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 720px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #0c1424;
+    }
+    .modal-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .modal-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: var(--radius-sm);
+      display: flex;
+    }
+    .modal-close:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .modal-body {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-height: 72vh;
+      overflow-y: auto;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px 14px;
+    }
+    .detail-item {
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+    }
+    .detail-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+      margin-bottom: 3px;
+    }
+    .detail-val {
+      font-size: 12px;
+      color: var(--text-primary);
+      font-weight: 500;
+      word-break: break-all;
+    }
+    .sql-full-box {
+      background: #070d18;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      font-family: 'JetBrains Mono', Consolas, monospace;
+      font-size: 11.5px;
+      color: #7dd3fc;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 200px;
+      overflow-y: auto;
+      line-height: 1.5;
+    }
+    .modal-footer {
+      padding: 12px 18px;
+      border-top: 1px solid var(--border-subtle);
+      background: #0c1424;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      pointer-events: auto;
+      background: #111e33;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent-blue);
+      color: var(--text-primary);
+      padding: 10px 14px;
+      border-radius: var(--radius-md);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      max-width: 380px;
+    }
+    .toast.success { border-left-color: var(--safe-green); }
+    .toast.error { border-left-color: var(--crit-red); }
+    .toast svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .toast.success svg { color: var(--safe-green); }
+    .toast.error svg { color: var(--crit-red); }
+
+    /* Cyber switch for IPS page */
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      margin-bottom: 8px;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; cursor: pointer; inset: 0;
+      background: #334155; border-radius: var(--radius-pill); transition: 0.2s;
+    }
+    .slider:before {
+      position: absolute; content: ""; height: 12px; width: 12px;
+      left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s;
+    }
+    input:checked + .slider { background: #0284c7; }
+    input:checked + .slider:before { transform: translateX(18px); }
+
+    .spin { animation: rotate 0.8s linear infinite; }
+    @keyframes rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    @media (max-width: 1200px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==========================================================================
+       SIDEBAR
+       ========================================================================== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-logo-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M9 12l2 2 4-4"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">Oracle DB-IDS</div>
+        <div class="brand-subtitle">Defense-in-Depth &amp; Active IPS</div>
+      </div>
+    </div>
+
+    <!-- Nav List -->
+    <div class="nav-section">
+      <ul class="nav-list">
+        <li class="nav-item active" onclick="switchTab('home', this)">
+          <div class="nav-item-left">
+            <span class="nav-logo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1V9.5z"/>
+              </svg>
+            </span>
+            <span>Tổng quan SOC</span>
+          </div>
+        </li>
+
+        <li class="nav-item" onclick="switchTab('alerts', this)">
+          <div class="nav-item-left">
+            <span class="nav-logo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </span>
+            <span>Cảnh báo &amp; Risk Score</span>
+          </div>
+          <span class="nav-badge" id="nav-alert-count">0</span>
+        </li>
+
+        <li class="nav-item" onclick="switchTab('fga', this)">
+          <div class="nav-item-left">
+            <span class="nav-logo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                <polyline points="2 17 12 22 22 17"/>
+                <polyline points="2 12 12 17 22 12"/>
+              </svg>
+            </span>
+            <span>Bẫy FGA &amp; Honeytoken</span>
+          </div>
+        </li>
+
+        <li class="nav-item" onclick="switchTab('triggers', this)">
+          <div class="nav-item-left">
+            <span class="nav-logo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+            </span>
+            <span>Trigger chặn tức thời</span>
+          </div>
+        </li>
+
+        <li class="nav-item" onclick="switchTab('audit', this)">
+          <div class="nav-item-left">
+            <span class="nav-logo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+              </svg>
+            </span>
+            <span>Nhật ký kiểm toán</span>
+          </div>
+        </li>
+
+        <li class="nav-item" onclick="switchTab('users', this)">
+          <div class="nav-item-left">
+            <span class="nav-logo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+            </span>
+            <span>Tài khoản &amp; Dữ liệu NV</span>
+          </div>
+        </li>
+
+        <li class="nav-item" onclick="switchTab('ips', this)">
+          <div class="nav-item-left">
+            <span class="nav-logo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </span>
+            <span>Phản ứng Đa cấp (IPS)</span>
+          </div>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Minimalist Sidebar Footer (Matching reference image) -->
+    <div class="sidebar-footer">
+      <div class="pulse-dot-large"></div>
+      <div>
+        <div class="footer-status-title">Oracle 23ai Security</div>
+        <div class="footer-status-sub">Online</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ==========================================================================
+       MAIN CONTENT
+       ========================================================================== -->
+  <div class="main">
+    <!-- Header / Topbar (Matching reference image) -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="pulse-wave-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </div>
+        <div class="topbar-title">
+          <h2 id="topbar-heading">Trung tâm Giám sát An ninh CSDL</h2>
+          <p id="topbar-subheading">Oracle 23ai DB-IDS • Honeytoken Canary • Thống kê &amp; Phòng thủ thông minh</p>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <div class="conn-pill">
+          <span class="status-dot-sm" id="conn-dot"></span>
+          <span id="conn-text">localhost:1521/FREEPDB1</span>
+        </div>
+        <button class="btn btn-primary" onclick="refreshData(true)">
+          <svg id="refresh-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"/>
+            <polyline points="1 20 1 14 7 14"/>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+          </svg>
+          <span>Làm mới dữ liệu (Flush Audit)</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="content">
+
+      <!-- ====================================================================
+           TAB 1: TỔNG QUAN SOC (OVERVIEW)
+           KPIs + Cảnh báo IDS + Preview Bẫy FGA (Xem chi tiết) + Preview Trigger (Xem chi tiết)
+           ==================================================================== -->
+      <div class="tab-view active" id="tab-home">
+        <!-- 4 KPI Cards (Matching reference image) -->
+        <section class="kpi-grid">
+          <!-- Card 1: Tổng sự kiện Audit & FGA -->
+          <div class="kpi-card kpi-blue">
+            <div class="kpi-top">
+              <div class="kpi-icon-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                  <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                  <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                </svg>
+              </div>
+              <div class="kpi-title">Tổng sự kiện Audit &amp; FGA</div>
+            </div>
+            <div class="kpi-body">
+              <div class="kpi-stat-group">
+                <div class="kpi-number" id="kpi-audit">18</div>
+                <div class="kpi-subtext green">↑ +12% so với trước đó</div>
+              </div>
+              <div class="kpi-chart-wrap">
+                <!-- Mini Bar chart SVG -->
+                <svg width="60" height="30" viewBox="0 0 60 30" fill="none">
+                  <rect x="2" y="16" width="6" height="14" rx="2" fill="#0284c7" opacity="0.6"/>
+                  <rect x="12" y="12" width="6" height="18" rx="2" fill="#0284c7" opacity="0.75"/>
+                  <rect x="22" y="18" width="6" height="12" rx="2" fill="#0284c7" opacity="0.6"/>
+                  <rect x="32" y="8" width="6" height="22" rx="2" fill="#0284c7" opacity="0.85"/>
+                  <rect x="42" y="4" width="6" height="26" rx="2" fill="#38bdf8"/>
+                  <rect x="52" y="10" width="6" height="20" rx="2" fill="#0284c7"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: Cảnh báo IDS đa chiều -->
+          <div class="kpi-card kpi-red">
+            <div class="kpi-top">
+              <div class="kpi-icon-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+              </div>
+              <div class="kpi-title">Cảnh báo IDS đa chiều</div>
+            </div>
+            <div class="kpi-body">
+              <div class="kpi-stat-group">
+                <div class="kpi-number" id="kpi-alerts">5</div>
+                <div class="kpi-subtext red">↑ +1 mới</div>
+              </div>
+              <div class="kpi-chart-wrap">
+                <!-- Mini Red Sparkline SVG -->
+                <svg width="65" height="30" viewBox="0 0 65 30" fill="none">
+                  <path d="M2 24 Q 15 26, 25 15 T 45 18 T 63 4" stroke="#ef4444" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                  <path d="M2 24 Q 15 26, 25 15 T 45 18 T 63 4 L 63 30 L 2 30 Z" fill="url(#red-spark-grad)" opacity="0.3"/>
+                  <defs>
+                    <linearGradient id="red-spark-grad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#ef4444"/>
+                      <stop offset="100%" stop-color="#ef4444" stop-opacity="0"/>
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: Vi phạm bị Trigger chặn -->
+          <div class="kpi-card kpi-yellow">
+            <div class="kpi-top">
+              <div class="kpi-icon-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+              </div>
+              <div class="kpi-title">Vi phạm bị Trigger chặn</div>
+            </div>
+            <div class="kpi-body">
+              <div class="kpi-stat-group">
+                <div class="kpi-number" id="kpi-triggers">2</div>
+                <div class="kpi-subtext green">↓ Đã xử lý</div>
+              </div>
+              <div class="kpi-chart-wrap">
+                <!-- Mini Yellow Sparkline SVG -->
+                <svg width="65" height="30" viewBox="0 0 65 30" fill="none">
+                  <path d="M2 22 Q 18 10, 32 20 T 63 8" stroke="#f97316" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                  <path d="M2 22 Q 18 10, 32 20 T 63 8 L 63 30 L 2 30 Z" fill="url(#yellow-spark-grad)" opacity="0.3"/>
+                  <defs>
+                    <linearGradient id="yellow-spark-grad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="#f97316"/>
+                      <stop offset="100%" stop-color="#f97316" stop-opacity="0"/>
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 4: Định mức rủi ro & Phản ứng IPS -->
+          <div class="kpi-card kpi-purple">
+            <div class="kpi-top">
+              <div class="kpi-icon-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polygon points="12 6 12 12 16 14"/>
+                </svg>
+              </div>
+              <div class="kpi-title">Định mức rủi ro &amp; Phản ứng IPS</div>
+            </div>
+            <div class="kpi-body">
+              <div class="kpi-stat-group">
+                <div class="kpi-number" id="kpi-locked">100 / 100</div>
+                <div class="kpi-subtext muted" id="kpi-ips-sub">Khóa (L3): 2 | Read-Only (L2): 1</div>
+              </div>
+              <div class="kpi-chart-wrap">
+                <!-- Mini Donut SVG -->
+                <svg width="34" height="34" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="14" fill="none" stroke="rgba(139,92,246,0.2)" stroke-width="4"/>
+                  <circle cx="18" cy="18" r="14" fill="none" stroke="#a855f7" stroke-width="4" stroke-dasharray="88" stroke-dashoffset="20" stroke-linecap="round"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Main Alert Table for Overview -->
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-left">
+              <div class="card-header-icon red">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+              </div>
+              <div>
+                <div class="card-title-text">Cảnh báo Phân tích Đa chiều &amp; Chấm điểm Rủi ro (IDS Detection Engine)</div>
+              </div>
+            </div>
+            <div class="card-tools">
+              <input type="text" id="home-alert-search" class="search-input" placeholder="🔍 Tìm kiếm..." oninput="renderHomeAlerts()" />
+              <button class="btn btn-sm btn-danger-outline" onclick="clearAlerts('ids')" title="Xóa lịch sử cảnh báo IDS">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+                <span>Xóa cảnh báo</span>
+              </button>
+            </div>
+          </div>
+          <div class="table-wrap" id="home-alerts-container"></div>
+        </section>
+
+        <!-- Bottom 2-card section with "Xem chi tiết →" (matching reference image) -->
+        <section class="grid-2">
+          <!-- Card Left: FGA & Honeytoken Preview -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-left">
+                <div class="card-header-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                </div>
+                <div class="card-title-text">Sự kiện Kiểm toán &amp; Bẫy Dữ liệu (DBMS_FGA &amp; Honeytoken)</div>
+              </div>
+              <span class="card-link" onclick="switchTab('fga')">Xem chi tiết →</span>
+            </div>
+            <div class="table-wrap" id="home-fga-container"></div>
+          </div>
+
+          <!-- Card Right: Trigger Preview -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-left">
+                <div class="card-header-icon yellow">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <ellipse cx="12" cy="5" rx="9" ry="3"/>
+                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+                  </svg>
+                </div>
+                <div class="card-title-text">Hành vi bị chặn tức thời bởi Database Trigger</div>
+              </div>
+              <span class="card-link" onclick="switchTab('triggers')">Xem chi tiết →</span>
+            </div>
+            <div class="table-wrap" id="home-triggers-container"></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ====================================================================
+           TAB 2: CẢNH BÁO & RISK SCORE (ALERTS ONLY)
+           4 KPI Cards + 1 Unique IDS Detection Engine table (filters, search, details)
+           ==================================================================== -->
+      <div class="tab-view" id="tab-alerts">
+        <!-- 4 KPI Cards (Kept on top as requested) -->
+        <section class="kpi-grid">
+          <div class="kpi-card kpi-blue">
+            <div class="kpi-top">
+              <div class="kpi-icon-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+              </div>
+              <div class="kpi-title">Tổng sự kiện Audit &amp; FGA</div>
+            </div>
+            <div class="kpi-body">
+              <div class="kpi-stat-group">
+                <div class="kpi-number" id="alerts-kpi-audit">18</div>
+                <div class="kpi-subtext green">Hệ thống giám sát ổn định</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="kpi-card kpi-red">
+            <div class="kpi-top">
+              <div class="kpi-icon-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              <div class="kpi-title">Cảnh báo IDS đa chiều</div>
+            </div>
+            <div class="kpi-body">
+              <div class="kpi-stat-group">
+                <div class="kpi-number" id="alerts-kpi-alerts">5</div>
+                <div class="kpi-subtext red">Cần phân tích &amp; xử lý</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="kpi-card kpi-yellow">
+            <div class="kpi-top">
+              <div class="kpi-icon-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              </div>
+              <div class="kpi-title">Vi phạm bị Trigger chặn</div>
+            </div>
+            <div class="kpi-body">
+              <div class="kpi-stat-group">
+                <div class="kpi-number" id="alerts-kpi-triggers">2</div>
+                <div class="kpi-subtext green">Chặn tức thì bởi Trigger</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="kpi-card kpi-purple">
+            <div class="kpi-top">
+              <div class="kpi-icon-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+              </div>
+              <div class="kpi-title">Đỉnh rủi ro &amp; Phản ứng IPS</div>
+            </div>
+            <div class="kpi-body">
+              <div class="kpi-stat-group">
+                <div class="kpi-number" id="alerts-kpi-locked">100 / 100</div>
+                <div class="kpi-subtext muted" id="alerts-kpi-ips-sub">Cách ly tự động cấp 3</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Unique IDS Detection Engine Table -->
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-left">
+              <div class="card-header-icon red">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+              </div>
+              <div>
+                <div class="card-title-text">Trung tâm Cảnh báo Xâm nhập &amp; Đánh giá Rủi ro (IDS Detection Engine)</div>
+                <div class="card-subtitle-text">Phát hiện Honeytoken Trap, Thống kê suy diễn (SUM/AVG/COUNT), SQL Injection, Brute-Force &amp; Lạm dụng quyền</div>
+              </div>
+            </div>
+            <div class="card-tools">
+              <input type="text" id="tab-alert-search" class="search-input" placeholder="🔍 Lọc User, Loại tấn công, SQL..." oninput="renderDedicatedAlerts()" />
+              <div class="filter-group">
+                <button class="filter-btn active" onclick="filterSev('ALL', this)">Tất cả</button>
+                <button class="filter-btn" onclick="filterSev('CRITICAL', this)">Critical</button>
+                <button class="filter-btn" onclick="filterSev('HIGH', this)">High</button>
+                <button class="filter-btn" onclick="filterSev('MEDIUM', this)">Medium</button>
+              </div>
+              <button class="btn btn-sm btn-danger-outline" onclick="clearAlerts('ids')" title="Xóa toàn bộ cảnh báo IDS">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                <span>Xóa cảnh báo</span>
+              </button>
+            </div>
+          </div>
+          <div class="table-wrap" id="dedicated-alerts-container"></div>
+        </section>
+      </div>
+
+      <!-- ====================================================================
+           TAB 3: BẪY FGA & HONEYTOKEN (FGA ONLY)
+           ==================================================================== -->
+      <div class="tab-view" id="tab-fga">
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-left">
+              <div class="card-header-icon purple">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                  <polyline points="2 17 12 22 22 17"/>
+                  <polyline points="2 12 12 17 22 12"/>
+                </svg>
+              </div>
+              <div>
+                <div class="card-title-text">Kiểm toán Mịn (DBMS_FGA) &amp; Bẫy Dữ liệu Honeytoken</div>
+                <div class="card-subtitle-text">Giám sát 2 chính sách: FGA_HONEYTOKEN_TRAP (bẫy manv='NV_TRAP') &amp; FGA_HIGH_SALARY_ACCESS (lương &gt;= 1000)</div>
+              </div>
+            </div>
+          </div>
+          <div class="table-wrap" id="dedicated-fga-container"></div>
+        </section>
+      </div>
+
+      <!-- ====================================================================
+           TAB 4: TRIGGER CHẶN TỨC THỜI (TRIGGERS ONLY)
+           ==================================================================== -->
+      <div class="tab-view" id="tab-triggers">
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-left">
+              <div class="card-header-icon yellow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+              </div>
+              <div>
+                <div class="card-title-text">Hành vi bị chặn tức thời bởi Database Trigger (Autonomous Transaction)</div>
+                <div class="card-subtitle-text">Ghi nhận từ SYS.IDS_TRIGGER_ALERTS: Ngăn chặn xóa nhân viên và tăng lương trái phép &gt; 50%</div>
+              </div>
+            </div>
+            <div class="card-tools">
+              <button class="btn btn-sm btn-warning-outline" onclick="clearAlerts('triggers')" title="Xóa nhật ký Trigger">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                <span>Xóa log Trigger</span>
+              </button>
+            </div>
+          </div>
+          <div class="table-wrap" id="dedicated-triggers-container"></div>
+        </section>
+      </div>
+
+      <!-- ====================================================================
+           TAB 5: NHẬT KÝ KIỂM TOÁN (AUDIT LOG ONLY)
+           ==================================================================== -->
+      <div class="tab-view" id="tab-audit">
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-left">
+              <div class="card-header-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                </svg>
+              </div>
+              <div>
+                <div class="card-title-text">Nhật ký Kiểm toán Thời gian thực (UNIFIED_AUDIT_TRAIL)</div>
+                <div class="card-subtitle-text">Truy vấn chi tiết câu lệnh SQL, Return Code, OS User, Host và Client Application</div>
+              </div>
+            </div>
+            <div class="card-tools">
+              <input type="text" id="audit-search" class="search-input" placeholder="🔍 Lọc User, Policy, Client, SQL..." oninput="renderAuditTable()" />
+            </div>
+          </div>
+          <div class="table-wrap" id="dedicated-audit-container"></div>
+        </section>
+      </div>
+
+      <!-- ====================================================================
+           TAB 6: TÀI KHOẢN & DỮ LIỆU NV (USERS & SYS.NV ONLY)
+           ==================================================================== -->
+      <div class="tab-view" id="tab-users">
+        <!-- Quản lý tài khoản User -->
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-left">
+              <div class="card-header-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              </div>
+              <div>
+                <div class="card-title-text">Quản lý Quyền Tài khoản Thực nghiệm &amp; Điều khiển Phản ứng</div>
+                <div class="card-subtitle-text">Kiểm soát trạng thái khóa tài khoản và chế độ quyền DML (Read-Only / Full DML) trên SYS.NV</div>
+              </div>
+            </div>
+          </div>
+          <div class="table-wrap" id="dedicated-users-container"></div>
+        </section>
+
+        <!-- Dữ liệu bảng SYS.NV & Bẫy Honeytoken -->
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-left">
+              <div class="card-header-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                </svg>
+              </div>
+              <div>
+                <div class="card-title-text">Dữ liệu Bảng Nhạy cảm SYS.NV &amp; Bản ghi Bẫy Honeytoken (NV_TRAP)</div>
+                <div class="card-subtitle-text">Bảo vệ đa tầng: Trigger TRG_PROTECT_NV + FGA_HONEYTOKEN_TRAP + Unified Audit</div>
+              </div>
+            </div>
+          </div>
+          <div class="table-wrap" id="dedicated-employees-container"></div>
+        </section>
+      </div>
+
+      <!-- ====================================================================
+           TAB 7: PHẢN ỨNG ĐA CẤP (GRADUATED ACTIVE IPS CONTROLS)
+           ==================================================================== -->
+      <div class="tab-view" id="tab-ips">
+        <!-- Cấu hình và công tắc IPS -->
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-left">
+              <div class="card-header-icon purple">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <div>
+                <div class="card-title-text">Trung tâm Điều khiển Phản ứng Đa cấp (Graduated Active Response &amp; IPS)</div>
+                <div class="card-subtitle-text">Cấu hình tự động hóa phân cấp xử lý vi phạm dựa trên Risk Score thời gian thực</div>
+              </div>
+            </div>
+            <div class="card-tools">
+              <button class="btn btn-sm btn-warning-outline" onclick="clearAlerts('all')" title="Đặt lại toàn bộ Risk Score về 0">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                <span>Reset Risk Score &amp; Lịch sử</span>
+              </button>
+            </div>
+          </div>
+
+          <div style="padding:16px 18px;">
+            <div class="switch-row">
+              <div>
+                <div style="font-weight:700;color:var(--text-primary);font-size:12.5px;">Tự động Phản ứng theo Risk Score (Graduated IPS)</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Tự động hạ quyền Read-Only (L2: 50-79) hoặc Khóa tài khoản &amp; ngắt kết nối (L3: &gt;=80)</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="ips-toggle" checked onchange="toggleAutoResponse(this.checked)" />
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="switch-row" style="margin-bottom:0;">
+              <div>
+                <div style="font-weight:700;color:var(--text-primary);font-size:12.5px;">Tự động làm mới dữ liệu chu kỳ 5 giây</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Tự động đồng bộ các vi phạm và trạng thái tài khoản thời gian thực từ Oracle</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="autorefresh-toggle" checked onchange="toggleAutoRefresh(this.checked)" />
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <!-- Bảng hiển thị Ma trận cấp độ rủi ro IPS -->
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-left">
+              <div class="card-title-text">Ma trận Phân cấp Bảo vệ (IPS Defense Level Matrix)</div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cấp độ</th>
+                  <th>Phạm vi Risk Score</th>
+                  <th>Hành vi Kích hoạt</th>
+                  <th>Biện pháp Can thiệp Tự động</th>
+                  <th>Khả năng thao tác CSDL</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="badge badge-success">Level 0: Normal</span></td>
+                  <td class="mono">0 – 19</td>
+                  <td>Hoạt động bình thường, đúng nghiệp vụ</td>
+                  <td>Ghi nhận kiểm toán tiêu chuẩn</td>
+                  <td>Đầy đủ quyền SELECT, INSERT, UPDATE, DELETE</td>
+                </tr>
+                <tr>
+                  <td><span class="badge badge-medium">Level 1: Warning</span></td>
+                  <td class="mono">20 – 49</td>
+                  <td>Truy cập ngoài giờ, thử mật khẩu sai 1-2 lần</td>
+                  <td>Cảnh báo SOC, tăng tần suất theo dõi</td>
+                  <td>Duy trì quyền hiện tại</td>
+                </tr>
+                <tr>
+                  <td><span class="badge badge-high">Level 2: Containment</span></td>
+                  <td class="mono">50 – 79</td>
+                  <td>Thống kê lương cao (SUM/AVG), quét schema</td>
+                  <td>Thu hồi quyền DML (REVOKE INSERT, UPDATE, DELETE)</td>
+                  <td>Chỉ cho phép đọc (READ-ONLY)</td>
+                </tr>
+                <tr>
+                  <td><span class="badge badge-critical">Level 3: Isolation</span></td>
+                  <td class="mono">80 – 100</td>
+                  <td>Chạm bẫy Honeytoken (NV_TRAP), SQL Injection, Brute-Force</td>
+                  <td>Khóa tài khoản (ALTER USER LOCK) &amp; Ngắt phiên kết nối (KILL SESSION)</td>
+                  <td>Toàn bộ kết nối bị từ chối và chặn đứng</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Bảng Trạng thái User trong IPS -->
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title-left">
+              <div class="card-title-text">Trạng thái Cách ly &amp; Phản ứng Thực tế Từng User</div>
+            </div>
+          </div>
+          <div class="table-wrap" id="ips-users-container"></div>
+        </section>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ==========================================================================
+       INSPECTION MODAL
+       ========================================================================== -->
+  <div class="modal-backdrop" id="audit-modal" onclick="if(event.target===this) closeAuditModal()">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div class="modal-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px;color:var(--accent-blue);">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <span id="modal-title-text">Chi tiết Bản ghi Kiểm toán &amp; Ngữ cảnh</span>
+        </div>
+        <button class="modal-close" onclick="closeAuditModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body" id="audit-modal-body"></div>
+      <div class="modal-footer">
+        <button class="btn btn-sm" onclick="copyModalSql()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <span>Sao chép SQL</span>
+        </button>
+        <button class="btn btn-sm btn-primary" onclick="closeAuditModal()">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ==========================================================================
+       JAVASCRIPT CLIENT APPLICATION LOGIC
+       100% Functionality Preserved • Zero Duplication Across Tabs
+       ========================================================================== -->
+  <script>
+    let cachedData = {};
+    let cachedAuditLogs = [];
+    let currentModalSql = '';
+    let autoRefreshTimer = null;
+    let currentAlertFilter = 'ALL';
+
+    const SVG_ICONS = {
+      lock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`,
+      unlock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`,
+      shieldOff: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.69 14a6.9 6.9 0 0 0 .31-2V5l-8-3-3.16 1.18"/><path d="M4.73 4.73L4 5v7c0 6 8 10 8 10a20.29 20.29 0 0 0 5.62-4.38"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`,
+      shieldCheck: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>`,
+      check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`,
+      alert: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+      trash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+      eye: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`
+    };
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function getRiskColor(score) {
+      const s = Number(score || 0);
+      if (s >= 80) return '#ef4444';
+      if (s >= 50) return '#f97316';
+      if (s >= 20) return '#eab308';
+      return '#10b981';
+    }
+
+    function getSeverityBadge(sev) {
+      const s = String(sev || '').toUpperCase();
+      if (s === 'CRITICAL') return '<span class="badge badge-critical">▲ CRITICAL</span>';
+      if (s === 'HIGH') return '<span class="badge badge-high">▲ HIGH</span>';
+      if (s === 'MEDIUM') return '<span class="badge badge-medium">▲ MEDIUM</span>';
+      return '<span class="badge badge-success">▲ LOW</span>';
+    }
+
+    function getIpsLevelBadge(lvl, label) {
+      const l = Number(lvl || 0);
+      const text = escapeHtml(label || `Level ${l}`);
+      if (l >= 3) return `<span class="badge badge-critical">${text}</span>`;
+      if (l === 2) return `<span class="badge badge-high">${text}</span>`;
+      if (l === 1) return `<span class="badge badge-medium">${text}</span>`;
+      return `<span class="badge badge-success">${text}</span>`;
+    }
+
+    function renderRiskBar(score) {
+      const s = Math.max(0, Math.min(100, Number(score || 0)));
+      const color = getRiskColor(s);
+      return `
+        <div class="risk-inline">
+          <span class="risk-score-text" style="color:${color}">${s}/100</span>
+          <div class="risk-bar-track">
+            <div class="risk-bar-prog" style="width:${s}%;background:${color}"></div>
+          </div>
+        </div>
+      `;
+    }
+
+    function showToast(msg, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const el = document.createElement('div');
+      el.className = `toast ${type}`;
+      el.innerHTML = `${type === 'success' ? SVG_ICONS.check : SVG_ICONS.alert}<span>${escapeHtml(msg)}</span>`;
+      container.appendChild(el);
+      setTimeout(() => el.remove(), 3500);
+    }
+
+    /* Tab Switching Functionality */
+    function switchTab(tabId, navEl) {
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+      if (navEl) {
+        navEl.classList.add('active');
+      } else {
+        // Find matching item by onclick
+        const match = Array.from(document.querySelectorAll('.nav-item')).find(el => el.getAttribute('onclick')?.includes(`'${tabId}'`));
+        if (match) match.classList.add('active');
+      }
+
+      document.querySelectorAll('.tab-view').forEach(v => v.classList.remove('active'));
+      const activeView = document.getElementById(`tab-${tabId}`);
+      if (activeView) activeView.classList.add('active');
+
+      const heading = document.getElementById('topbar-heading');
+      const subheading = document.getElementById('topbar-subheading');
+
+      if (tabId === 'home') {
+        heading.textContent = 'Trung tâm Giám sát An ninh CSDL';
+        subheading.textContent = 'Oracle 23ai DB-IDS • Honeytoken Canary • Thống kê & Phòng thủ thông minh';
+      } else if (tabId === 'alerts') {
+        heading.textContent = 'Cảnh báo Xâm nhập Đa chiều & Chấm điểm Rủi ro (Risk Scoring)';
+        subheading.textContent = 'Phát hiện Honeytoken Trap, Thống kê suy diễn (SUM/AVG/COUNT), SQL Injection & Brute-Force';
+      } else if (tabId === 'fga') {
+        heading.textContent = 'Giám sát Kiểm toán Mịn (DBMS_FGA) & Bẫy Dữ liệu Honeytoken';
+        subheading.textContent = 'Policies: FGA_HONEYTOKEN_TRAP (manv="NV_TRAP") & FGA_HIGH_SALARY_ACCESS (lương >= 1000)';
+      } else if (tabId === 'triggers') {
+        heading.textContent = 'Hành vi bị chặn tức thời bởi Database Trigger';
+        subheading.textContent = 'Trigger Autonomous Transaction - Ngăn chặn xóa nhân viên & Chặn tăng lương trái phép > 50%';
+      } else if (tabId === 'audit') {
+        heading.textContent = 'Nhật ký Kiểm toán Thời gian thực (UNIFIED_AUDIT_TRAIL)';
+        subheading.textContent = 'Truy vấn chi tiết câu lệnh SQL, Return Code, OS User, Host và Client Application';
+      } else if (tabId === 'users') {
+        heading.textContent = 'Quản lý Tài khoản & Dữ liệu Bảng Nhạy cảm (SYS.NV)';
+        subheading.textContent = 'Kiểm soát quyền truy cập User thực nghiệm và bản ghi bẫy Honeytoken';
+      } else if (tabId === 'ips') {
+        heading.textContent = 'Phản ứng Đa cấp Tự động (Graduated Active Response & IPS)';
+        subheading.textContent = 'Cấu hình tự động hóa: Level 0 Normal → Level 1 Warning → Level 2 Read-Only → Level 3 Isolation';
+      }
+    }
+
+    async function refreshData(flush = false) {
+      const svg = document.getElementById('refresh-svg');
+      svg.classList.add('spin');
+      try {
+        const res = await fetch(`/api/data?flush=${flush ? '1' : '0'}`);
+        const data = await res.json();
+        cachedData = data;
+        renderDashboard(data);
+        if (flush && data.ok) {
+          showToast('Đã đồng bộ và làm mới dữ liệu Unified Audit & FGA!');
+        }
+      } catch (err) {
+        showToast('Không thể kết nối máy chủ', 'error');
+      } finally {
+        setTimeout(() => svg.classList.remove('spin'), 350);
+      }
+    }
+
+    function renderDashboard(data) {
+      const connDot = document.getElementById('conn-dot');
+      const connText = document.getElementById('conn-text');
+
+      if (!data.ok) {
+        connDot.classList.add('offline');
+        connText.textContent = 'Mất kết nối Oracle';
+        return;
+      }
+      connDot.classList.remove('offline');
+      connText.textContent = `${data.dsn || 'FREEPDB1'}`;
+
+      const m = data.metrics || {};
+      document.getElementById('kpi-audit').textContent = m.audit_count ?? 0;
+      document.getElementById('kpi-alerts').textContent = m.alert_count ?? 0;
+      document.getElementById('kpi-triggers').textContent = m.trigger_count ?? 0;
+      document.getElementById('kpi-locked').textContent = `${m.max_risk ?? 0} / 100`;
+      document.getElementById('kpi-ips-sub').textContent = `Khóa (L3): ${m.locked_count ?? 0} | Read-Only (L2): ${m.readonly_count ?? 0}`;
+
+      // In alerts tab
+      document.getElementById('alerts-kpi-audit').textContent = m.audit_count ?? 0;
+      document.getElementById('alerts-kpi-alerts').textContent = m.alert_count ?? 0;
+      document.getElementById('alerts-kpi-triggers').textContent = m.trigger_count ?? 0;
+      document.getElementById('alerts-kpi-locked').textContent = `${m.max_risk ?? 0} / 100`;
+      document.getElementById('alerts-kpi-ips-sub').textContent = `Khóa (L3): ${m.locked_count ?? 0} | Read-Only (L2): ${m.readonly_count ?? 0}`;
+
+      document.getElementById('nav-alert-count').textContent = m.alert_count ?? 0;
+      document.getElementById('ips-toggle').checked = !!data.auto_response;
+
+      if (data.auto_locked && data.auto_locked.length > 0) {
+        showToast(`[Level 3] Đã tự động KHÓA & ngắt kết nối: ${data.auto_locked.join(', ')}`, 'error');
+      }
+      if (data.auto_revoked && data.auto_revoked.length > 0) {
+        showToast(`[Level 2] Đã tự động hạ quyền Read-Only: ${data.auto_revoked.join(', ')}`, 'error');
+      }
+
+      // Render views
+      renderHomeAlerts();
+      renderHomePreviews();
+      renderDedicatedAlerts();
+      renderDedicatedFga();
+      renderDedicatedTriggers();
+      renderDedicatedUsers();
+      renderDedicatedEmployees();
+      renderIpsView();
+
+      cachedAuditLogs = data.audit_logs || [];
+      renderAuditTable();
+    }
+
+    /* TAB 1: HOME OVERVIEW RENDERS */
+    function renderHomeAlerts() {
+      const container = document.getElementById('home-alerts-container');
+      const alerts = cachedData.alerts || [];
+      const query = (document.getElementById('home-alert-search')?.value || '').toLowerCase().trim();
+
+      const filtered = alerts.filter(a => {
+        if (!query) return true;
+        return (
+          String(a.user || '').toLowerCase().includes(query) ||
+          String(a.attack_type || '').toLowerCase().includes(query) ||
+          String(a.details || '').toLowerCase().includes(query) ||
+          String(a.context || '').toLowerCase().includes(query)
+        );
+      });
+
+      if (!filtered.length) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            <div>Hệ thống an toàn (Risk Score = 0). Không có cảnh báo xâm nhập nào.</div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Mức độ</th>
+              <th>Risk Score</th>
+              <th>Mức phản ứng (IPS)</th>
+              <th>Thời gian</th>
+              <th>User</th>
+              <th>Loại tấn công / Bất thường</th>
+              <th>Ngữ cảnh (Client / Host)</th>
+              <th style="text-align:right">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtered.map((a, idx) => `
+              <tr class="clickable-row" onclick="openAlertModal(${idx})">
+                <td>${getSeverityBadge(a.severity)}</td>
+                <td>${renderRiskBar(a.risk_score)}</td>
+                <td>${getIpsLevelBadge(a.response_level, a.response_label)}</td>
+                <td class="mono">${escapeHtml(a.time)}</td>
+                <td><strong>${escapeHtml(a.user)}</strong></td>
+                <td>${escapeHtml(a.attack_type)}</td>
+                <td class="mono" style="color:var(--text-secondary);font-size:11px;">${escapeHtml(a.context || '—')}</td>
+                <td style="text-align:right" onclick="event.stopPropagation()">
+                  <button class="btn btn-sm btn-danger-outline" onclick="dismissSingleIdsAlert(${idx})" title="Xóa cảnh báo này">
+                    ${SVG_ICONS.trash}
+                  </button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function renderHomePreviews() {
+      // Compact FGA preview for Overview
+      const fgaContainer = document.getElementById('home-fga-container');
+      const fgaEvents = (cachedData.fga_events || []).slice(0, 5);
+      if (!fgaEvents.length) {
+        fgaContainer.innerHTML = `<div class="empty-state" style="padding:18px;">Chưa có sự kiện bẫy FGA nào.</div>`;
+      } else {
+        fgaContainer.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Thời gian</th>
+                <th>User</th>
+                <th>Chính sách FGA</th>
+                <th>Ngữ cảnh (Client)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${fgaEvents.map(r => `
+                <tr class="${String(r.FGA_POLICY_NAME).includes('HONEYTOKEN') ? 'honeytoken-row' : ''}">
+                  <td class="mono">${escapeHtml(r.EVENT_TIMESTAMP)}</td>
+                  <td><strong>${escapeHtml(r.DBUSERNAME)}</strong></td>
+                  <td><span class="badge ${String(r.FGA_POLICY_NAME).includes('HONEYTOKEN') ? 'badge-critical' : 'badge-neutral'}">${escapeHtml(r.FGA_POLICY_NAME || 'FGA')}</span></td>
+                  <td class="mono" style="font-size:11px;color:var(--text-muted);">${escapeHtml(r.CLIENT_PROGRAM_NAME || 'SQL Developer')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+
+      // Compact Trigger preview for Overview
+      const trigContainer = document.getElementById('home-triggers-container');
+      const triggers = (cachedData.triggers || []).slice(0, 5);
+      if (!triggers.length) {
+        trigContainer.innerHTML = `<div class="empty-state" style="padding:18px;">Chưa có vi phạm nào bị Trigger chặn.</div>`;
+      } else {
+        trigContainer.innerHTML = `
+          <table>
+            <thead>
+              <tr>
+                <th>Thời gian</th>
+                <th>User</th>
+                <th>Loại vi phạm</th>
+                <th>Chi tiết ngắn gọn</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${triggers.map(t => `
+                <tr>
+                  <td class="mono">${escapeHtml(t.EVENT_TIME)}</td>
+                  <td><strong>${escapeHtml(t.DB_USER)}</strong></td>
+                  <td><span class="badge badge-high">${escapeHtml(t.ATTACK_TYPE)}</span></td>
+                  <td style="color:var(--text-secondary);">${escapeHtml(t.DETAILS)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+    }
+
+    /* TAB 2: DEDICATED ALERTS TAB */
+    function filterSev(sev, btnEl) {
+      currentAlertFilter = sev;
+      if (btnEl) {
+        btnEl.parentElement.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btnEl.classList.add('active');
+      }
+      renderDedicatedAlerts();
+    }
+
+    function renderDedicatedAlerts() {
+      const container = document.getElementById('dedicated-alerts-container');
+      const alerts = cachedData.alerts || [];
+      const query = (document.getElementById('tab-alert-search')?.value || '').toLowerCase().trim();
+
+      const filtered = alerts.filter(a => {
+        if (currentAlertFilter !== 'ALL' && String(a.severity || '').toUpperCase() !== currentAlertFilter) {
+          return false;
+        }
+        if (query) {
+          const match = (
+            String(a.user || '').toLowerCase().includes(query) ||
+            String(a.attack_type || '').toLowerCase().includes(query) ||
+            String(a.details || '').toLowerCase().includes(query) ||
+            String(a.context || '').toLowerCase().includes(query)
+          );
+          if (!match) return false;
+        }
+        return true;
+      });
+
+      if (!filtered.length) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            <div>Không có cảnh báo nào phù hợp với bộ lọc hiện tại.</div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Mức độ</th>
+              <th>Risk Score</th>
+              <th>Mức phản ứng (IPS)</th>
+              <th>Thời gian</th>
+              <th>User</th>
+              <th>Loại tấn công / Bất thường</th>
+              <th>Ngữ cảnh (Client / Host)</th>
+              <th>Chi tiết / Câu lệnh SQL</th>
+              <th style="text-align:right">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtered.map((a, idx) => `
+              <tr class="clickable-row" onclick="openAlertModal(${idx})">
+                <td>${getSeverityBadge(a.severity)}</td>
+                <td>${renderRiskBar(a.risk_score)}</td>
+                <td>${getIpsLevelBadge(a.response_level, a.response_label)}</td>
+                <td class="mono">${escapeHtml(a.time)}</td>
+                <td><strong>${escapeHtml(a.user)}</strong></td>
+                <td>${escapeHtml(a.attack_type)}</td>
+                <td class="mono" style="font-size:11px;color:var(--text-secondary);">${escapeHtml(a.context || '—')}</td>
+                <td><span class="sql-code" title="${escapeHtml(a.details)}">${escapeHtml(a.details)}</span></td>
+                <td style="text-align:right" onclick="event.stopPropagation()">
+                  <div style="display:inline-flex;gap:5px;">
+                    <button class="btn btn-sm" onclick="openAlertModal(${idx})" title="Xem chi tiết">
+                      ${SVG_ICONS.eye}
+                    </button>
+                    <button class="btn btn-sm btn-danger-outline" onclick="dismissSingleIdsAlert(${idx})" title="Xóa cảnh báo">
+                      ${SVG_ICONS.trash}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      window._currentAlerts = filtered;
+    }
+
+    /* TAB 3: DEDICATED FGA TAB */
+    function renderDedicatedFga() {
+      const container = document.getElementById('dedicated-fga-container');
+      const rows = cachedData.fga_events || [];
+      if (!rows.length) {
+        container.innerHTML = `<div class="empty-state">Chưa có sự kiện nào kích hoạt bẫy FGA_HONEYTOKEN_TRAP hoặc FGA_HIGH_SALARY_ACCESS.</div>`;
+        return;
+      }
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Thời gian</th>
+              <th>User</th>
+              <th>Chính sách FGA (FGA_POLICY_NAME)</th>
+              <th>Ngữ cảnh (Client / Host)</th>
+              <th>Câu lệnh kích hoạt (SQL_TEXT)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r => {
+              const isTrap = String(r.FGA_POLICY_NAME).includes('HONEYTOKEN');
+              const ctx = `${r.CLIENT_PROGRAM_NAME || 'Unknown'} (${r.OS_USERNAME || 'os'}@${r.USERHOST || 'host'})`;
+              return `
+                <tr class="${isTrap ? 'honeytoken-row' : ''}">
+                  <td class="mono">${escapeHtml(r.EVENT_TIMESTAMP)}</td>
+                  <td><strong>${escapeHtml(r.DBUSERNAME)}</strong></td>
+                  <td>
+                    <span class="badge ${isTrap ? 'badge-critical' : 'badge-neutral'}">
+                      ${escapeHtml(r.FGA_POLICY_NAME || 'FineGrainedAudit')}
+                    </span>
+                  </td>
+                  <td class="mono" style="font-size:11px;color:var(--text-secondary);">${escapeHtml(ctx)}</td>
+                  <td><span class="sql-code" title="${escapeHtml(r.SQL_TEXT)}">${escapeHtml(r.SQL_TEXT || r.ACTION_NAME)}</span></td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    /* TAB 4: DEDICATED TRIGGERS TAB */
+    function renderDedicatedTriggers() {
+      const container = document.getElementById('dedicated-triggers-container');
+      const rows = cachedData.triggers || [];
+      if (!rows.length) {
+        container.innerHTML = `<div class="empty-state">Chưa có vi phạm thao tác dữ liệu nào bị Database Trigger chặn.</div>`;
+        return;
+      }
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Thời gian</th>
+              <th>User</th>
+              <th>Loại vi phạm</th>
+              <th>Chi tiết ngăn chặn</th>
+              <th style="text-align:right">Thao tác</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(t => `
+              <tr>
+                <td class="mono">${escapeHtml(t.EVENT_TIME)}</td>
+                <td><strong>${escapeHtml(t.DB_USER)}</strong></td>
+                <td><span class="badge badge-high">${escapeHtml(t.ATTACK_TYPE)}</span></td>
+                <td>${escapeHtml(t.DETAILS)}</td>
+                <td style="text-align:right">
+                  <button class="btn btn-sm btn-danger-outline" onclick="clearSingleTrigger(${Number(t.ALERT_ID)})" title="Xóa dòng này">
+                    ${SVG_ICONS.trash}
+                  </button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    /* TAB 5: DEDICATED AUDIT LOG TAB */
+    function renderAuditTable() {
+      const container = document.getElementById('dedicated-audit-container');
+      const keyword = (document.getElementById('audit-search')?.value || '').toLowerCase().trim();
+      const filtered = cachedAuditLogs.filter(row => {
+        if (!keyword) return true;
+        return (
+          String(row.DBUSERNAME || '').toLowerCase().includes(keyword) ||
+          String(row.ACTION_NAME || '').toLowerCase().includes(keyword) ||
+          String(row.OBJECT_NAME || '').toLowerCase().includes(keyword) ||
+          String(row.FGA_POLICY_NAME || '').toLowerCase().includes(keyword) ||
+          String(row.CLIENT_PROGRAM_NAME || '').toLowerCase().includes(keyword) ||
+          String(row.USERHOST || '').toLowerCase().includes(keyword) ||
+          String(row.SQL_TEXT || '').toLowerCase().includes(keyword) ||
+          String(row.RETURN_CODE || '').toLowerCase().includes(keyword)
+        );
+      });
+
+      if (!filtered.length) {
+        container.innerHTML = `<div class="empty-state">Không có bản ghi kiểm toán nào khớp bộ lọc.</div>`;
+        return;
+      }
+
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Thời gian</th>
+              <th>DB User</th>
+              <th>Loại Audit / Policy</th>
+              <th>Action</th>
+              <th>Đối tượng</th>
+              <th>Ngữ cảnh (Client / Host)</th>
+              <th>Câu lệnh SQL</th>
+              <th>Mã trả về</th>
+              <th style="text-align:right">Chi tiết</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtered.map((r, idx) => {
+              const code = Number(r.RETURN_CODE || 0);
+              const badgeClass = code === 0 ? 'badge-success' : 'badge-critical';
+              const isFga = String(r.AUDIT_TYPE) === 'FineGrainedAudit' || !!r.FGA_POLICY_NAME;
+              const objFull = r.OBJECT_SCHEMA && r.OBJECT_NAME ? `${r.OBJECT_SCHEMA}.${r.OBJECT_NAME}` : (r.OBJECT_NAME || '—');
+              const ctx = `${r.CLIENT_PROGRAM_NAME || '—'} @ ${r.USERHOST || '—'}`;
+              return `
+                <tr class="clickable-row ${String(r.FGA_POLICY_NAME).includes('HONEYTOKEN') ? 'honeytoken-row' : ''}" onclick="openAuditModal(${idx})">
+                  <td class="mono">${escapeHtml(r.EVENT_TIMESTAMP)}</td>
+                  <td><strong>${escapeHtml(r.DBUSERNAME)}</strong></td>
+                  <td><span class="badge ${isFga ? 'badge-medium' : 'badge-neutral'}">${escapeHtml(r.FGA_POLICY_NAME || r.AUDIT_TYPE || 'Standard')}</span></td>
+                  <td><span class="badge badge-neutral">${escapeHtml(r.ACTION_NAME)}</span></td>
+                  <td class="mono">${escapeHtml(objFull)}</td>
+                  <td class="mono" style="font-size:11px;color:var(--text-secondary);">${escapeHtml(ctx)}</td>
+                  <td>${r.SQL_TEXT ? `<span class="sql-code" title="${escapeHtml(r.SQL_TEXT)}">${escapeHtml(r.SQL_TEXT)}</span>` : '<span style="color:var(--text-muted)">—</span>'}</td>
+                  <td><span class="badge ${badgeClass} mono">${code === 0 ? '0 (OK)' : 'ORA-' + code}</span></td>
+                  <td style="text-align:right" onclick="event.stopPropagation(); openAuditModal(${idx});">
+                    <button class="btn btn-sm">${SVG_ICONS.eye}<span>Xem</span></button>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
+      window._filteredAudit = filtered;
+    }
+
+    /* TAB 6: DEDICATED USERS & EMPLOYEES TAB */
+    function renderDedicatedUsers() {
+      const container = document.getElementById('dedicated-users-container');
+      const users = cachedData.users || [];
+      if (!users.length) {
+        container.innerHTML = `<div class="empty-state">Chưa có thông tin User.</div>`;
+        return;
+      }
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Tài khoản</th>
+              <th>Trạng thái Account</th>
+              <th>Chế độ Quyền (SYS.NV)</th>
+              <th>Risk Score</th>
+              <th>Mức Phản ứng IPS</th>
+              <th>Thời điểm khóa</th>
+              <th style="text-align:right">Điều khiển Cách ly (Admin Controls)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${users.map(u => {
+              const isLocked = String(u.ACCOUNT_STATUS).toUpperCase().includes('LOCK');
+              const isReadOnly = String(u.DML_STATUS).toUpperCase() === 'READ-ONLY';
+              return `
+                <tr>
+                  <td><strong>${escapeHtml(u.USERNAME)}</strong></td>
+                  <td><span class="badge ${isLocked ? 'badge-critical' : 'badge-success'}">${isLocked ? SVG_ICONS.lock : SVG_ICONS.unlock} ${escapeHtml(u.ACCOUNT_STATUS)}</span></td>
+                  <td><span class="badge ${isReadOnly ? 'badge-high' : 'badge-success'}">${isReadOnly ? 'READ-ONLY' : 'FULL DML'}</span></td>
+                  <td>${renderRiskBar(u.RISK_SCORE)}</td>
+                  <td>${getIpsLevelBadge(u.RESPONSE_LEVEL, u.RESPONSE_LABEL)}</td>
+                  <td class="mono">${escapeHtml(u.LOCK_DATE || '—')}</td>
+                  <td style="text-align:right">
+                    <div style="display:inline-flex;gap:5px;">
+                      ${isReadOnly
+                        ? `<button class="btn btn-sm" onclick="userAction('${escapeHtml(u.USERNAME)}', 'grant_dml')" title="Khôi phục quyền SELECT, INSERT, UPDATE, DELETE">${SVG_ICONS.shieldCheck}<span>Khôi phục DML</span></button>`
+                        : `<button class="btn btn-sm btn-warning-outline" onclick="userAction('${escapeHtml(u.USERNAME)}', 'revoke_dml')" title="Thu hồi quyền INSERT, UPDATE, DELETE">${SVG_ICONS.shieldOff}<span>Read-Only</span></button>`
+                      }
+                      ${isLocked
+                        ? `<button class="btn btn-sm" style="color:#6ee7b7;border-color:var(--safe-border);" onclick="userAction('${escapeHtml(u.USERNAME)}', 'unlock')">${SVG_ICONS.unlock}<span>Mở khóa</span></button>`
+                        : `<button class="btn btn-sm btn-danger-outline" onclick="userAction('${escapeHtml(u.USERNAME)}', 'lock')">${SVG_ICONS.lock}<span>Khóa &amp; Kill</span></button>`
+                      }
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function renderDedicatedEmployees() {
+      const container = document.getElementById('dedicated-employees-container');
+      const rows = cachedData.employees || [];
+      if (!rows.length) {
+        container.innerHTML = `<div class="empty-state">Chưa có dữ liệu bảng SYS.NV.</div>`;
+        return;
+      }
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Mã NV</th>
+              <th>Phân loại Bản ghi</th>
+              <th>Họ và Tên</th>
+              <th>Lương</th>
+              <th>Giới tính</th>
+              <th>CMND / CCCD</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r => {
+              const isTrap = String(r.MANV).toUpperCase() === 'NV_TRAP';
+              return `
+                <tr class="${isTrap ? 'honeytoken-row' : ''}">
+                  <td class="mono"><strong>${escapeHtml(r.MANV)}</strong></td>
+                  <td>${isTrap ? `<span class="badge badge-critical">${SVG_ICONS.alert} HONEYTOKEN CANARY TRAP</span>` : `<span class="badge badge-neutral">Bản ghi Nghiệp vụ</span>`}</td>
+                  <td><strong>${escapeHtml(r.HOTEN)}</strong></td>
+                  <td class="mono" style="color:${isTrap ? '#ef4444' : '#10b981'};font-weight:700;">${escapeHtml(r.LUONG)}</td>
+                  <td>${escapeHtml(r.GIOITINH)}</td>
+                  <td class="mono">${escapeHtml(r.CMND)}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    /* TAB 7: DEDICATED IPS TAB */
+    function renderIpsView() {
+      const container = document.getElementById('ips-users-container');
+      const users = cachedData.users || [];
+      if (!users.length) return;
+      container.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Tài khoản</th>
+              <th>Risk Score</th>
+              <th>Cấp độ Phản ứng Hiện tại</th>
+              <th>Chế độ Quyền</th>
+              <th>Trạng thái Tài khoản</th>
+              <th style="text-align:right">Hành động Phản ứng Thủ công</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${users.map(u => {
+              const isLocked = String(u.ACCOUNT_STATUS).toUpperCase().includes('LOCK');
+              const isReadOnly = String(u.DML_STATUS).toUpperCase() === 'READ-ONLY';
+              return `
+                <tr>
+                  <td><strong>${escapeHtml(u.USERNAME)}</strong></td>
+                  <td>${renderRiskBar(u.RISK_SCORE)}</td>
+                  <td>${getIpsLevelBadge(u.RESPONSE_LEVEL, u.RESPONSE_LABEL)}</td>
+                  <td><span class="badge ${isReadOnly ? 'badge-high' : 'badge-success'}">${isReadOnly ? 'READ-ONLY' : 'FULL DML'}</span></td>
+                  <td><span class="badge ${isLocked ? 'badge-critical' : 'badge-success'}">${escapeHtml(u.ACCOUNT_STATUS)}</span></td>
+                  <td style="text-align:right">
+                    <div style="display:inline-flex;gap:6px;">
+                      ${isReadOnly
+                        ? `<button class="btn btn-sm" onclick="userAction('${escapeHtml(u.USERNAME)}', 'grant_dml')">${SVG_ICONS.shieldCheck}<span>Khôi phục DML</span></button>`
+                        : `<button class="btn btn-sm btn-warning-outline" onclick="userAction('${escapeHtml(u.USERNAME)}', 'revoke_dml')">${SVG_ICONS.shieldOff}<span>Read-Only</span></button>`
+                      }
+                      ${isLocked
+                        ? `<button class="btn btn-sm" style="color:#6ee7b7;border-color:var(--safe-border);" onclick="userAction('${escapeHtml(u.USERNAME)}', 'unlock')">Mở khóa User</button>`
+                        : `<button class="btn btn-sm btn-danger-outline" onclick="userAction('${escapeHtml(u.USERNAME)}', 'lock')">Khóa L3 (Isolation)</button>`
+                      }
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    /* MODAL FUNCTIONS */
+    function openAlertModal(idx) {
+      const a = (window._currentAlerts || cachedData.alerts || [])[idx];
+      if (!a) return;
+      currentModalSql = String(a.details || '');
+      document.getElementById('modal-title-text').textContent = 'Chi tiết Cảnh báo Xâm nhập Đa chiều (IDS Detection Alert)';
+      const body = document.getElementById('audit-modal-body');
+      body.innerHTML = `
+        <div class="detail-grid">
+          <div class="detail-item">
+            <div class="detail-label">Thời gian phát hiện</div>
+            <div class="detail-val mono">${escapeHtml(a.time)}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Tài khoản CSDL vi phạm</div>
+            <div class="detail-val"><strong>${escapeHtml(a.user)}</strong></div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Mức độ cảnh báo (Severity)</div>
+            <div class="detail-val">${getSeverityBadge(a.severity)}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Mức phản ứng IPS</div>
+            <div class="detail-val">${getIpsLevelBadge(a.response_level, a.response_label)}</div>
+          </div>
+          <div class="detail-item" style="grid-column:span 2;">
+            <div class="detail-label">Loại tấn công / Hành vi bất thường</div>
+            <div class="detail-val" style="color:#fdba74;font-weight:700;">${escapeHtml(a.attack_type)}</div>
+          </div>
+          <div class="detail-item" style="grid-column:span 2;">
+            <div class="detail-label">Ngữ cảnh kết nối (Client / OS User / Host)</div>
+            <div class="detail-val mono">${escapeHtml(a.context || '—')}</div>
+          </div>
+        </div>
+        <div>
+          <div class="detail-label" style="margin-bottom:6px;">Chi tiết phát hiện / Lệnh SQL khớp vi phạm</div>
+          <div class="sql-full-box">${escapeHtml(a.details || '(Không có thêm chi tiết)')}</div>
+        </div>
+      `;
+      document.getElementById('audit-modal').classList.add('open');
+    }
+
+    function openAuditModal(idx) {
+      const row = (window._filteredAudit || cachedAuditLogs)[idx];
+      if (!row) return;
+      currentModalSql = String(row.SQL_TEXT || '');
+      const code = Number(row.RETURN_CODE || 0);
+      const statusText = code === 0 ? '0 — Thực thi thành công (OK)' : `ORA-${code} — Thực thi thất bại / Vi phạm`;
+      const objFull = row.OBJECT_SCHEMA && row.OBJECT_NAME ? `${row.OBJECT_SCHEMA}.${row.OBJECT_NAME}` : (row.OBJECT_NAME || '—');
+
+      document.getElementById('modal-title-text').textContent = 'Chi tiết Bản ghi Kiểm toán (Unified Audit Trail)';
+      const body = document.getElementById('audit-modal-body');
+      body.innerHTML = `
+        <div class="detail-grid">
+          <div class="detail-item">
+            <div class="detail-label">Thời gian sự kiện</div>
+            <div class="detail-val mono">${escapeHtml(row.EVENT_TIMESTAMP)}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Tài khoản CSDL</div>
+            <div class="detail-val"><strong>${escapeHtml(row.DBUSERNAME)}</strong></div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Hành động &amp; Loại Audit</div>
+            <div class="detail-val">
+              <span class="badge badge-neutral">${escapeHtml(row.ACTION_NAME)}</span>
+              <span class="badge badge-neutral">${escapeHtml(row.AUDIT_TYPE || 'Standard')}</span>
+            </div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Mã trả về (Return Code)</div>
+            <div class="detail-val">
+              <span class="badge ${code === 0 ? 'badge-success' : 'badge-critical'} mono">${escapeHtml(statusText)}</span>
+            </div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Đối tượng tác động</div>
+            <div class="detail-val mono">${escapeHtml(objFull)}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Chính sách FGA / Unified Audit</div>
+            <div class="detail-val mono">${escapeHtml(row.FGA_POLICY_NAME || row.UNIFIED_AUDIT_POLICIES || '—')}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Tài khoản HĐH &amp; Máy trạm</div>
+            <div class="detail-val mono">${escapeHtml((row.OS_USERNAME || '—') + ' @ ' + (row.USERHOST || '—'))}</div>
+          </div>
+          <div class="detail-item">
+            <div class="detail-label">Phần mềm kết nối</div>
+            <div class="detail-val mono">${escapeHtml(row.CLIENT_PROGRAM_NAME || '—')}</div>
+          </div>
+        </div>
+        <div>
+          <div class="detail-label" style="margin-bottom:6px;">Câu lệnh SQL (SQL_TEXT)</div>
+          <div class="sql-full-box">${escapeHtml(row.SQL_TEXT || '(Không có câu lệnh SQL)')}</div>
+        </div>
+      `;
+      document.getElementById('audit-modal').classList.add('open');
+    }
+
+    function closeAuditModal() {
+      document.getElementById('audit-modal').classList.remove('open');
+    }
+
+    function copyModalSql() {
+      if (!currentModalSql) {
+        showToast('Không có câu lệnh SQL để sao chép', 'error');
+        return;
+      }
+      navigator.clipboard.writeText(currentModalSql).then(() => {
+        showToast('Đã sao chép câu lệnh SQL vào clipboard!');
+      });
+    }
+
+    /* ACTION HANDLERS */
+    async function userAction(username, action) {
+      try {
+        const res = await fetch('/api/user-action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, action })
+        });
+        const data = await res.json();
+        showToast(data.message, data.ok ? 'success' : 'error');
+        refreshData(false);
+      } catch (e) {
+        showToast('Lỗi thực thi thao tác User', 'error');
+      }
+    }
+
+    async function clearAlerts(target) {
+      try {
+        const res = await fetch('/api/clear-alerts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target })
+        });
+        const data = await res.json();
+        showToast(data.message, data.ok ? 'success' : 'error');
+        refreshData(false);
+      } catch (e) {
+        showToast('Không thể xóa cảnh báo', 'error');
+      }
+    }
+
+    async function clearSingleTrigger(alertId) {
+      try {
+        const res = await fetch('/api/clear-alerts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target: 'single_trigger', alert_id: alertId })
+        });
+        const data = await res.json();
+        showToast(data.message, data.ok ? 'success' : 'error');
+        refreshData(false);
+      } catch (e) {
+        showToast('Không thể xóa dòng Trigger', 'error');
+      }
+    }
+
+    async function dismissSingleIdsAlert(idx) {
+      const list = window._currentAlerts || cachedData.alerts || [];
+      const item = list[idx];
+      if (!item) return;
+      try {
+        const res = await fetch('/api/clear-alerts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target: 'single_ids', alert_key: item.key })
+        });
+        const data = await res.json();
+        showToast(data.message, data.ok ? 'success' : 'error');
+        refreshData(false);
+      } catch (e) {
+        showToast('Không thể xóa cảnh báo', 'error');
+      }
+    }
+
+    async function toggleAutoResponse(enabled) {
+      try {
+        const res = await fetch('/api/toggle-ips', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ auto_response: enabled })
+        });
+        const data = await res.json();
+        showToast(data.auto_response ? 'Đã BẬT Tự động Phản ứng IPS' : 'Đã TẮT Tự động Phản ứng IPS');
+        refreshData(false);
+      } catch (e) {
+        showToast('Không thể cập nhật cấu hình IPS', 'error');
+      }
+    }
+
+    function toggleAutoRefresh(enabled) {
+      if (autoRefreshTimer) {
+        clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+      }
+      if (enabled) {
+        autoRefreshTimer = setInterval(() => refreshData(false), 5000);
+      }
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeAuditModal();
+    });
+
+    // Initial boot
+    refreshData(true);
+    toggleAutoRefresh(true);
+  </script>
+</body>
+</html>
