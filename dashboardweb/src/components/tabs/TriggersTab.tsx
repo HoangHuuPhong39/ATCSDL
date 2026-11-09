@@ -1,16 +1,14 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Zap,
   Trash2,
   CheckCircle2,
-  ShieldAlert,
-  BookOpen,
-  ArrowRight,
   CheckCheck,
-  RotateCcw,
-  Terminal,
+  Eye,
+  BookOpen,
 } from 'lucide-react';
 import { TriggerAlert, ActiveTab } from '../../types/ids';
+import { maskUsername } from '../../utils/privacy';
 
 interface TriggersTabProps {
   triggers: TriggerAlert[];
@@ -21,6 +19,7 @@ interface TriggersTabProps {
   onClearAllTriggers: () => void;
   onOpenOracleBridge?: () => void;
   onNavigateTab?: (tab: ActiveTab) => void;
+  onOpenTriggerModal?: (trigger: TriggerAlert) => void;
 }
 
 export const TriggersTab: React.FC<TriggersTabProps> = ({
@@ -30,209 +29,239 @@ export const TriggersTab: React.FC<TriggersTabProps> = ({
   onResetReviewedTriggers,
   onClearSingleTrigger,
   onClearAllTriggers,
-  onOpenOracleBridge,
   onNavigateTab,
+  onOpenTriggerModal,
 }) => {
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
   const reviewedCount = useMemo(() => triggers.filter((t) => t.reviewed).length, [triggers]);
   const pendingCount = triggers.length - reviewedCount;
 
   return (
-    <div className="space-y-5">
-      {/* Trigger Architecture Overview */}
-      <div className="bg-[#101b2e] border border-amber-500/25 rounded-xl p-4.5 shadow-lg shadow-black/30">
+    <div className="space-y-4">
+      {/* Trigger Architecture Overview (1-line description + 2 compact rules) */}
+      <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-3.5 transition-colors">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/35 flex items-center justify-center text-amber-400 shrink-0">
-              <Zap className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="font-bold text-slate-100 text-[14px]">
-                Trigger Bảo vệ Dữ liệu Nội sinh (SYS.TRG_PROTECT_NV)
-              </h3>
-              <p className="text-[11.5px] text-slate-400">
-                Sử dụng <code className="text-amber-300 font-mono">PRAGMA AUTONOMOUS_TRANSACTION</code> để ghi log độc lập vào bảng <code className="text-sky-300 font-mono">SYS.IDS_TRIGGER_ALERTS</code> trước khi ném ngoại lệ chặn đứng giao dịch
-              </p>
-            </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <Zap className="w-4 h-4 text-[var(--accent)] shrink-0" />
+            <h2 className="text-sm font-semibold text-[var(--text-1)] truncate">
+              Trigger bảo vệ nội sinh (SYS.TRG_PROTECT_NV)
+            </h2>
           </div>
 
           {onNavigateTab && (
             <button
+              type="button"
               onClick={() => onNavigateTab('docs')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#131e33] border border-sky-500/20 text-sky-300 hover:text-white hover:border-sky-400 text-[11.5px] font-semibold transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 text-xs text-[var(--accent)] hover:underline cursor-pointer focus-visible:ring"
             >
               <BookOpen className="w-3.5 h-3.5" />
-              <span>Xem mã nguồn PL/SQL tại Báo cáo</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <span>Xem mã PL/SQL tại Báo cáo</span>
             </button>
           )}
         </div>
 
-        {/* 2 Security rules handled by trigger */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
-          <div className="bg-[#0b1322] border border-white/5 rounded-lg p-3">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-200 text-[12px]">Quy tắc 1: Ngăn chặn Xóa nhân viên</span>
-              <span className="font-mono text-[10.5px] text-red-400 font-bold">ORA-20001</span>
+        <p className="text-xs text-[var(--text-3)] mt-1.5 truncate">
+          Ghi log độc lập bằng <code className="text-[var(--accent)] font-mono">PRAGMA AUTONOMOUS_TRANSACTION</code> trước khi ném ngoại lệ chặn giao dịch.
+        </p>
+
+        {/* 2 Rules Compact Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 mt-3">
+          <div className="bg-[var(--surface-hover)] border border-[var(--line)] rounded-lg p-2.5 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <span className="font-semibold text-[var(--text-1)] text-xs block truncate">
+                Chặn xóa nhân viên (DELETE)
+              </span>
+              <span className="text-xs text-[var(--text-3)] truncate block">
+                Ngăn chặn phá hoại dữ liệu gốc
+              </span>
             </div>
-            <p className="text-[11.5px] text-slate-400 mt-1">
-              Bất kỳ câu lệnh <code className="text-sky-300 font-mono">DELETE</code> nào trên bảng nhân viên đều bị chặn tức thời. Hệ thống ghi lại mã nhân viên bị nhắm tới và người thực hiện.
-            </p>
+            <span className="font-mono text-xs text-[var(--danger)] font-bold shrink-0">
+              ORA-20001
+            </span>
           </div>
 
-          <div className="bg-[#0b1322] border border-white/5 rounded-lg p-3">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-200 text-[12px]">Quy tắc 2: Chặn tăng lương gian lận &gt; 50%</span>
-              <span className="font-mono text-[10.5px] text-red-400 font-bold">ORA-20002</span>
+          <div className="bg-[var(--surface-hover)] border border-[var(--line)] rounded-lg p-2.5 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <span className="font-semibold text-[var(--text-1)] text-xs block truncate">
+                Chặn tăng lương &gt; 50% (UPDATE)
+              </span>
+              <span className="text-xs text-[var(--text-3)] truncate block">
+                Chống can thiệp biển thủ lương
+              </span>
             </div>
-            <p className="text-[11.5px] text-slate-400 mt-1">
-              Phát hiện can thiệp số liệu lương bất thường khi <code className="text-sky-300 font-mono">:NEW.luong &gt; :OLD.luong * 1.5</code>. Chặn đứng hành vi biển thủ quỹ lương.
-            </p>
+            <span className="font-mono text-xs text-[var(--warn)] font-bold shrink-0">
+              ORA-20002
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Trigger Alerts Table */}
-      <section className="bg-[#101b2e] border border-amber-500/20 rounded-xl shadow-lg shadow-black/30 overflow-hidden">
-        <div className="p-3.5 px-4.5 border-b border-white/5 bg-[#0e1626]/60 flex items-center justify-between flex-wrap gap-2.5">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-              <Zap className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-[13.5px] font-bold text-slate-100">
-                Nhật ký Vi phạm Bị chặn Tức thời (SYS.IDS_TRIGGER_ALERTS)
-              </div>
-              <div className="text-[11px] text-slate-400">
-                Tổng bản ghi: <strong className="text-amber-300 font-mono">{triggers.length}</strong> · Đã kiểm duyệt:{' '}
-                <strong className="text-emerald-400 font-mono">{reviewedCount}</strong>
-              </div>
-            </div>
+      {/* Main Triggers Table */}
+      <section className="bg-[var(--surface)] border border-[var(--line)] rounded-xl overflow-hidden transition-colors">
+        <div className="p-3 px-4 border-b border-[var(--line)] flex items-center justify-between flex-wrap gap-2.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <Zap className="w-4 h-4 text-[var(--accent)] shrink-0" />
+            <h2 className="text-sm font-semibold text-[var(--text-1)] truncate">
+              Nhật ký trigger chặn ({triggers.length})
+            </h2>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Action buttons (Ghost + Trash icon) */}
+          <div className="flex items-center gap-1.5 shrink-0">
             {triggers.length > 0 && pendingCount > 0 && (
               <button
+                type="button"
                 onClick={onMarkAllTriggersReviewed}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 text-[11.5px] font-semibold transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--ok-soft)] border border-[var(--ok)]/30 text-[var(--ok)] hover:bg-[var(--ok-soft)]/80 text-xs font-medium transition-colors cursor-pointer focus-visible:ring"
+                title="Đánh dấu tất cả vi phạm trigger đã duyệt"
               >
                 <CheckCheck className="w-3.5 h-3.5" />
-                <span>Duyệt tất cả ({pendingCount})</span>
+                <span>Duyệt ({pendingCount})</span>
               </button>
             )}
 
             {reviewedCount > 0 && (
               <button
+                type="button"
                 onClick={onResetReviewedTriggers}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/45 text-amber-200 hover:bg-amber-500/30 text-[11.5px] font-bold transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--line)] hover:border-[var(--danger)] text-[var(--text-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] text-xs font-medium transition-colors cursor-pointer focus-visible:ring"
+                title="Reset các sự kiện đã kiểm duyệt"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <Trash2 className="w-3.5 h-3.5" />
                 <span>Reset đã duyệt ({reviewedCount})</span>
               </button>
             )}
 
-            {triggers.length > 0 ? (
-              <button
-                onClick={onClearAllTriggers}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-transparent border border-amber-500/35 text-amber-300 hover:bg-amber-500/15 text-[11.5px] font-semibold transition-all cursor-pointer"
-                title="Reset toàn bộ log Trigger"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Reset log Trigger</span>
-              </button>
-            ) : (
-              onOpenOracleBridge && (
+            {triggers.length > 0 && (
+              confirmClearAll ? (
+                <div className="inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClearAllTriggers();
+                      setConfirmClearAll(false);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[var(--danger)] text-white text-xs font-medium cursor-pointer transition-colors focus-visible:ring"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Xác nhận xóa?</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmClearAll(false)}
+                    className="px-2 py-1.5 rounded-lg bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--text-2)] text-xs cursor-pointer focus-visible:ring"
+                  >
+                    Hủy
+                  </button>
+                </div>
+              ) : (
                 <button
-                  onClick={onOpenOracleBridge}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 text-[11.5px] font-semibold transition-all cursor-pointer"
+                  type="button"
+                  onClick={() => setConfirmClearAll(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--line)] hover:border-[var(--danger)] text-[var(--text-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] text-xs font-medium transition-colors cursor-pointer focus-visible:ring"
+                  title="Xóa toàn bộ bản ghi trigger"
                 >
-                  <Terminal className="w-3.5 h-3.5" />
-                  <span>Kết nối Oracle SQL Developer</span>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Xóa hết</span>
                 </button>
               )
             )}
           </div>
         </div>
 
-        <div className="overflow-x-auto max-h-[480px]">
+        <div className="overflow-x-auto">
           {triggers.length === 0 ? (
-            <div className="p-10 text-center text-slate-400 flex flex-col items-center gap-3">
-              <CheckCircle2 className="w-9 h-9 text-emerald-400" />
-              <div className="text-[12.5px] text-slate-200 font-semibold">
-                Tất cả nhật ký vi phạm Trigger đã được kiểm duyệt và Reset hoàn tất.
-              </div>
-              {onOpenOracleBridge && (
-                <button
-                  onClick={onOpenOracleBridge}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 text-[12px] font-semibold transition-all cursor-pointer"
-                >
-                  <Terminal className="w-3.5 h-3.5" />
-                  <span>Thực thi UPDATE / DELETE trên Oracle SQL Developer</span>
-                </button>
-              )}
+            <div className="py-12 text-center text-[var(--text-3)] flex flex-col items-center gap-2 text-xs">
+              <CheckCircle2 className="w-8 h-8 text-[var(--ok)]" />
+              <span>Chưa có vi phạm nào bị trigger chặn đứng.</span>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse text-[12px]">
+            <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-amber-500/15 bg-[#0b1322] text-slate-400 uppercase text-[10.5px] font-bold tracking-wider sticky top-0 z-10">
-                  <th className="py-2.5 px-3.5">Trạng thái</th>
-                  <th className="py-2.5 px-3.5">ID</th>
-                  <th className="py-2.5 px-3.5">Thời gian</th>
-                  <th className="py-2.5 px-3.5">User</th>
-                  <th className="py-2.5 px-3.5">Loại vi phạm</th>
-                  <th className="py-2.5 px-3.5">Chi tiết ngăn chặn</th>
-                  <th className="py-2.5 px-3.5 text-right">Kiểm duyệt &amp; Reset</th>
+                <tr className="border-b border-[var(--line)] bg-[var(--surface-subtle)] text-[var(--text-3)] uppercase text-xs font-semibold tracking-wider sticky top-0 z-10">
+                  <th className="py-2.5 px-3.5 w-12 text-center">Duyệt</th>
+                  <th className="py-2.5 px-3.5 w-24">Giờ</th>
+                  <th className="py-2.5 px-3.5 w-24">User</th>
+                  <th className="py-2.5 px-3.5 w-28">Mã lỗi</th>
+                  <th className="py-2.5 px-3.5 w-24">Hành động</th>
+                  <th className="py-2.5 px-3.5 max-w-[320px]">Chi tiết câu lệnh</th>
+                  <th className="py-2.5 px-3.5 w-20 text-right">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-[var(--line)]">
                 {triggers.map((t) => (
                   <tr
                     key={t.ALERT_ID}
-                    className={`hover:bg-amber-500/5 transition-colors ${
-                      t.reviewed ? 'opacity-75 bg-emerald-950/10' : ''
+                    onClick={() => onOpenTriggerModal && onOpenTriggerModal(t)}
+                    className={`hover:bg-[var(--surface-hover)] transition-colors cursor-pointer group ${
+                      t.reviewed ? 'opacity-70 bg-[var(--surface-subtle)]/40' : ''
                     }`}
                   >
-                    <td className="py-2.5 px-3.5 whitespace-nowrap">
+                    {/* Review Toggle */}
+                    <td className="py-2.5 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                       <button
+                        type="button"
                         onClick={() => onToggleReviewTrigger(t.ALERT_ID)}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer ${
+                        aria-label={t.reviewed ? 'Bỏ đánh dấu đã duyệt' : 'Đánh dấu đã duyệt'}
+                        className={`w-6 h-6 rounded flex items-center justify-center transition-colors cursor-pointer focus-visible:ring mx-auto ${
                           t.reviewed
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                            : 'bg-slate-800/80 text-slate-400 border-white/10 hover:border-emerald-500/40 hover:text-emerald-300'
+                            ? 'text-[var(--ok)]'
+                            : 'text-[var(--text-3)] hover:text-[var(--ok)]'
                         }`}
                       >
-                        <CheckCircle2 className="w-3 h-3" />
-                        <span>{t.reviewed ? 'ĐÃ DUYỆT' : 'CHỜ DUYỆT'}</span>
+                        <CheckCircle2 className="w-4 h-4" />
                       </button>
                     </td>
-                    <td className="py-2.5 px-3.5 font-mono text-slate-400 tabular-nums">#{t.ALERT_ID}</td>
-                    <td className="py-2.5 px-3.5 font-mono text-slate-300 text-[11px] whitespace-nowrap tabular-nums">{t.EVENT_TIME}</td>
-                    <td className="py-2.5 px-3.5 font-bold font-mono text-sky-300">{t.DB_USER}</td>
-                    <td className="py-2.5 px-3.5">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10.5px] font-bold font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                        <ShieldAlert className="w-3 h-3 text-amber-400" />
-                        {t.ATTACK_TYPE}
+
+                    {/* Time */}
+                    <td className="py-2.5 px-3.5 font-mono text-[var(--text-3)] whitespace-nowrap tabular-nums">
+                      {t.EVENT_TIME ? (t.EVENT_TIME.includes(' ') ? t.EVENT_TIME.split(' ')[1] : t.EVENT_TIME) : '—'}
+                    </td>
+
+                    {/* User */}
+                    <td className="py-2.5 px-3.5 font-mono font-semibold text-[var(--text-1)] whitespace-nowrap">
+                      {maskUsername(t.DB_USER)}
+                    </td>
+
+                    {/* Error Code */}
+                    <td className="py-2.5 px-3.5 font-mono font-bold whitespace-nowrap text-[var(--danger)]">
+                      {t.ATTACK_TYPE?.includes('SALARY') ? 'ORA-20002' : 'ORA-20001'}
+                    </td>
+
+                    {/* Attack Type */}
+                    <td className="py-2.5 px-3.5 font-mono font-medium text-[var(--accent)] whitespace-nowrap">
+                      {t.ATTACK_TYPE}
+                    </td>
+
+                    {/* SQL Details (Truncated) */}
+                    <td className="py-2.5 px-3.5 max-w-[320px]">
+                      <span className="soc-sql-chip truncate block" title={t.DETAILS}>
+                        {t.DETAILS}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3.5 text-slate-200">{t.DETAILS}</td>
-                    <td className="py-2.5 px-3.5 text-right whitespace-nowrap">
-                      <div className="inline-flex items-center gap-1.5">
+
+                    {/* Actions */}
+                    <td className="py-2.5 px-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      <div className="inline-flex items-center gap-1">
+                        {onOpenTriggerModal && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenTriggerModal(t)}
+                            className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-3)] hover:text-[var(--accent)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer focus-visible:ring"
+                            title="Xem chi tiết"
+                            aria-label="Xem chi tiết bản ghi trigger"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
-                          onClick={() => onToggleReviewTrigger(t.ALERT_ID)}
-                          className={`p-1 rounded border transition-colors cursor-pointer ${
-                            t.reviewed
-                              ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                              : 'bg-[#131e33] border-white/10 text-slate-400 hover:text-emerald-300'
-                          }`}
-                          title={t.reviewed ? 'Bỏ dấu đã kiểm duyệt' : 'Đánh dấu đã kiểm duyệt'}
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
+                          type="button"
                           onClick={() => onClearSingleTrigger(t.ALERT_ID)}
-                          className="p-1 rounded bg-transparent border border-red-500/30 text-red-300 hover:bg-red-500/15 transition-colors cursor-pointer"
-                          title="Đã kiểm duyệt & Reset dòng này"
+                          className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] transition-colors cursor-pointer focus-visible:ring"
+                          title="Xóa bản ghi này"
+                          aria-label="Xóa bản ghi trigger"
                         >
-                          <RotateCcw className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>

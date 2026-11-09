@@ -26,7 +26,7 @@ SELECT * FROM SYS.NV WHERE manv = 'NV1' OR 1=1;
 
 -- [Lệnh 1.1.B - String Tautology Bypass]:
 -- Biến thể bypass chuỗi ký tự phổ biến
-SELECT * FROM SYS.NV WHERE hoten = 'admin' OR 'a'='a';
+SELECT * FROM SYS.NV WHERE hoten = 'admin' OR '1'='1';
 
 -- [Lệnh 1.1.C - UNION-based SQL Injection]:
 -- Ghép nối câu lệnh SELECT trái phép để dò quét cấu trúc bảng hệ thống

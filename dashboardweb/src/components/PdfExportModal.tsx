@@ -75,6 +75,15 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
     }
   }, [isOpen, initialScope, defaultPrivacyMode]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   const reportModel = useMemo(() => {
     return buildPdfReportModel(
       {
@@ -135,110 +144,116 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/80 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="pdf-export-modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 backdrop-blur-xs"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-[#0f192b] border border-sky-500/35 rounded-xl w-full max-w-5xl shadow-2xl shadow-black/90 overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl w-full max-w-5xl shadow-2xl shadow-black/80 overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="px-5 py-3.5 border-b border-white/10 bg-[#0c1424] flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5 text-[14px] font-bold text-slate-100">
-            <FileDown className="w-4 h-4 text-sky-400 shrink-0" />
-            <span>Trích xuất Hồ sơ Báo cáo &amp; Lưu trữ Bảo mật định dạng PDF (Chuẩn A4)</span>
+        <div className="px-5 py-3.5 border-b border-[var(--line)] bg-[var(--surface)] flex items-center justify-between gap-2">
+          <div id="pdf-export-modal-title" className="flex items-center gap-2.5 text-sm font-semibold text-[var(--text-1)]">
+            <FileDown className="w-4 h-4 text-[var(--accent)] shrink-0" />
+            <span>Xuất hồ sơ báo cáo PDF</span>
           </div>
           <button
             onClick={onClose}
             aria-label="Đóng cửa sổ xuất PDF"
-            className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-white/10 transition-colors cursor-pointer"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer focus-visible:ring"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Body: Left Configuration + Right Live A4 Preview */}
-        <div className="p-5 overflow-y-auto grid grid-cols-1 lg:grid-cols-12 gap-5 text-[12.5px]">
+        <div className="p-5 overflow-y-auto grid grid-cols-1 lg:grid-cols-12 gap-5 text-xs">
           {/* Left 6 cols: Export Configuration */}
           <div className="lg:col-span-6 space-y-4">
             {/* 1. Scope selector */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase text-slate-400 block">
-                1. Chọn Loại Hồ sơ Báo cáo PDF cần xuất:
+              <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)] block">
+                Loại hồ sơ báo cáo
               </label>
               <div className="grid grid-cols-1 gap-2">
                 <button
+                  type="button"
                   onClick={() => {
                     setScope('full');
                     setPreviewPageIndex(0);
                   }}
-                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer flex items-start justify-between gap-3 ${
+                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer flex items-start justify-between gap-3 focus-visible:ring ${
                     scope === 'full'
-                      ? 'bg-sky-500/15 border-sky-400 text-white'
-                      : 'bg-[#0b1322] border-white/10 text-slate-300 hover:border-sky-500/35'
+                      ? 'bg-[var(--accent)]/10 border-[var(--accent)] text-[var(--text-1)]'
+                      : 'bg-[var(--surface-subtle)] border-[var(--line)] text-[var(--text-2)] hover:border-[var(--line-hover)] hover:bg-[var(--surface-hover)]'
                   }`}
                 >
                   <div className="flex items-start gap-2.5">
-                    <Layers className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                    <Layers className={`w-4 h-4 shrink-0 mt-0.5 ${scope === 'full' ? 'text-[var(--accent)]' : 'text-[var(--text-3)]'}`} />
                     <div>
-                      <div className="font-bold text-[12.5px]">
-                        Hồ sơ Bảo mật Tổng hợp (Full SOC Audit Report)
+                      <div className="font-semibold text-xs text-[var(--text-1)]">
+                        Hồ sơ bảo mật tổng hợp (Full SOC Report)
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
-                        Bao gồm Tóm tắt KPI, Trạng thái 4 User, Cảnh báo Xâm nhập ({reportModel.summary.totalAlerts}) &amp; Nhật ký Kiểm toán ({reportModel.summary.totalAuditLogs})
+                      <div className="text-xs text-[var(--text-3)] mt-0.5">
+                        Tóm tắt KPI, 4 User, Cảnh báo ({reportModel.summary.totalAlerts}) &amp; Kiểm toán ({reportModel.summary.totalAuditLogs})
                       </div>
                     </div>
                   </div>
-                  {scope === 'full' && <CheckCircle2 className="w-4 h-4 text-sky-400 shrink-0" />}
+                  {scope === 'full' && <CheckCircle2 className="w-4 h-4 text-[var(--accent)] shrink-0" />}
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => {
                     setScope('alerts');
                     setPreviewPageIndex(0);
                   }}
-                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer flex items-start justify-between gap-3 ${
+                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer flex items-start justify-between gap-3 focus-visible:ring ${
                     scope === 'alerts'
-                      ? 'bg-red-500/15 border-red-400 text-white'
-                      : 'bg-[#0b1322] border-white/10 text-slate-300 hover:border-red-500/35'
+                      ? 'bg-[var(--accent)]/10 border-[var(--accent)] text-[var(--text-1)]'
+                      : 'bg-[var(--surface-subtle)] border-[var(--line)] text-[var(--text-2)] hover:border-[var(--line-hover)] hover:bg-[var(--surface-hover)]'
                   }`}
                 >
                   <div className="flex items-start gap-2.5">
-                    <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <ShieldAlert className={`w-4 h-4 shrink-0 mt-0.5 ${scope === 'alerts' ? 'text-[var(--accent)]' : 'text-[var(--text-3)]'}`} />
                     <div>
-                      <div className="font-bold text-[12.5px]">
-                        Báo cáo Cảnh báo Xâm nhập CSDL (IDS Alerts Only)
+                      <div className="font-semibold text-xs text-[var(--text-1)]">
+                        Cảnh báo xâm nhập CSDL (IDS Alerts Only)
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
-                        Trích xuất chuyên sâu danh sách {reportModel.summary.totalAlerts} cảnh báo kỹ thuật DBMS &amp; suy diễn thống kê SDB
+                      <div className="text-xs text-[var(--text-3)] mt-0.5">
+                        Trích xuất chuyên sâu danh sách {reportModel.summary.totalAlerts} cảnh báo DBMS &amp; SDB
                       </div>
                     </div>
                   </div>
-                  {scope === 'alerts' && <CheckCircle2 className="w-4 h-4 text-red-400 shrink-0" />}
+                  {scope === 'alerts' && <CheckCircle2 className="w-4 h-4 text-[var(--accent)] shrink-0" />}
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => {
                     setScope('audit');
                     setPreviewPageIndex(0);
                   }}
-                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer flex items-start justify-between gap-3 ${
+                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer flex items-start justify-between gap-3 focus-visible:ring ${
                     scope === 'audit'
-                      ? 'bg-emerald-500/15 border-emerald-400 text-white'
-                      : 'bg-[#0b1322] border-white/10 text-slate-300 hover:border-emerald-500/35'
+                      ? 'bg-[var(--accent)]/10 border-[var(--accent)] text-[var(--text-1)]'
+                      : 'bg-[var(--surface-subtle)] border-[var(--line)] text-[var(--text-2)] hover:border-[var(--line-hover)] hover:bg-[var(--surface-hover)]'
                   }`}
                 >
                   <div className="flex items-start gap-2.5">
-                    <FileText className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <FileText className={`w-4 h-4 shrink-0 mt-0.5 ${scope === 'audit' ? 'text-[var(--accent)]' : 'text-[var(--text-3)]'}`} />
                     <div>
-                      <div className="font-bold text-[12.5px]">
-                        Hồ sơ Nhật ký Kiểm toán Hợp nhất (UNIFIED_AUDIT_TRAIL Only)
+                      <div className="font-semibold text-xs text-[var(--text-1)]">
+                        Nhật ký kiểm toán hợp nhất (UNIFIED_AUDIT_TRAIL Only)
                       </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5">
-                        Trích xuất {reportModel.summary.totalAuditLogs} bản ghi kiểm toán SQL_TEXT, Policy, Return Code và Ngữ cảnh
+                      <div className="text-xs text-[var(--text-3)] mt-0.5">
+                        Trích xuất {reportModel.summary.totalAuditLogs} bản ghi kiểm toán SQL, Policy và Ngữ cảnh
                       </div>
                     </div>
                   </div>
-                  {scope === 'audit' && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+                  {scope === 'audit' && <CheckCircle2 className="w-4 h-4 text-[var(--accent)] shrink-0" />}
                 </button>
               </div>
             </div>
@@ -246,8 +261,8 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
             {/* 2. Review status filter & Privacy Mode */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] font-bold uppercase text-slate-400 block mb-1">
-                  2. Lọc theo Trạng thái Kiểm duyệt:
+                <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)] block mb-1">
+                  Trạng thái duyệt
                 </label>
                 <select
                   value={reviewFilter}
@@ -255,36 +270,36 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
                     setReviewFilter(e.target.value as PdfReviewFilter);
                     setPreviewPageIndex(0);
                   }}
-                  className="w-full bg-[#0b1322] border border-sky-500/25 rounded-lg text-slate-100 px-3 py-2 text-[12px] outline-none focus:border-sky-400"
+                  className="w-full bg-[var(--surface-hover)] border border-[var(--line)] rounded-lg text-[var(--text-1)] px-3 py-2 text-xs outline-none focus:border-[var(--accent)] cursor-pointer"
                 >
-                  <option value="ALL">Tất cả bản ghi (Mọi trạng thái)</option>
-                  <option value="PENDING">Chỉ bản ghi Chờ duyệt</option>
-                  <option value="REVIEWED">Chỉ bản ghi Đã kiểm duyệt</option>
+                  <option value="ALL">Tất cả bản ghi</option>
+                  <option value="PENDING">Chỉ bản ghi chờ duyệt</option>
+                  <option value="REVIEWED">Chỉ bản ghi đã duyệt</option>
                 </select>
               </div>
 
               <div>
-                <label className="text-[11px] font-bold uppercase text-slate-400 block mb-1">
-                  3. Bảo mật Định danh trong PDF:
+                <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)] block mb-1">
+                  Bảo mật định danh
                 </label>
                 <button
                   type="button"
                   onClick={() => setPdfPrivacyMode((prev) => !prev)}
-                  className={`w-full px-3 py-2 rounded-lg border text-[12px] font-semibold flex items-center justify-between transition-all cursor-pointer ${
+                  className={`w-full px-3 py-2 rounded-lg border text-xs font-medium flex items-center justify-between transition-colors cursor-pointer focus-visible:ring ${
                     pdfPrivacyMode
-                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                      : 'bg-[#0b1322] border-amber-500/35 text-amber-300'
+                      ? 'bg-[var(--accent)]/10 border-[var(--accent)]/40 text-[var(--accent)]'
+                      : 'bg-[var(--surface-hover)] border-[var(--line)] text-[var(--text-3)] hover:text-[var(--text-1)]'
                   }`}
                 >
                   <span className="flex items-center gap-1.5">
                     {pdfPrivacyMode ? (
-                      <EyeOff className="w-3.5 h-3.5 text-emerald-400" />
+                      <EyeOff className="w-3.5 h-3.5 text-[var(--accent)]" />
                     ) : (
-                      <Eye className="w-3.5 h-3.5 text-amber-400" />
+                      <Eye className="w-3.5 h-3.5 text-[var(--text-3)]" />
                     )}
-                    <span>{pdfPrivacyMode ? 'Đang ẩn User & Host' : 'Hiện đầy đủ User'}</span>
+                    <span>{pdfPrivacyMode ? 'Ẩn User & Host' : 'Hiện đầy đủ'}</span>
                   </span>
-                  <span className="font-mono text-[10.5px] uppercase">
+                  <span className="font-mono text-xs uppercase">
                     {pdfPrivacyMode ? 'MASKED' : 'RAW'}
                   </span>
                 </button>
@@ -294,55 +309,55 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
             {/* 3. Report Metadata fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-[11px] font-bold uppercase text-slate-400 block mb-1">
-                  Mã Hồ sơ Lưu trữ:
+                <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)] block mb-1">
+                  Mã hồ sơ lưu trữ
                 </label>
                 <input
                   type="text"
                   value={reportCode}
                   onChange={(e) => setReportCode(e.target.value)}
-                  className="w-full bg-[#0b1322] border border-sky-500/25 rounded-lg text-slate-100 px-3 py-1.5 text-[12px] font-mono outline-none focus:border-sky-400"
+                  className="w-full bg-[var(--surface-hover)] border border-[var(--line)] rounded-lg text-[var(--text-1)] px-3 py-1.5 text-xs font-mono outline-none focus:border-[var(--accent)]"
                 />
               </div>
               <div>
-                <label className="text-[11px] font-bold uppercase text-slate-400 block mb-1">
-                  Người lập / Kiểm toán viên:
+                <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)] block mb-1">
+                  Người lập / Kiểm toán viên
                 </label>
                 <input
                   type="text"
                   value={auditorName}
                   onChange={(e) => setAuditorName(e.target.value)}
-                  className="w-full bg-[#0b1322] border border-sky-500/25 rounded-lg text-slate-100 px-3 py-1.5 text-[12px] outline-none focus:border-sky-400"
+                  className="w-full bg-[var(--surface-hover)] border border-[var(--line)] rounded-lg text-[var(--text-1)] px-3 py-1.5 text-xs outline-none focus:border-[var(--accent)]"
                 />
               </div>
             </div>
 
             <div>
-              <label className="text-[11px] font-bold uppercase text-slate-400 block mb-1">
-                Ghi chú &amp; Nhận định Kiểm toán đính kèm trong PDF:
+              <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)] block mb-1">
+                Ghi chú &amp; nhận định đính kèm
               </label>
               <input
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full bg-[#0b1322] border border-sky-500/25 rounded-lg text-slate-100 px-3 py-1.5 text-[12px] outline-none focus:border-sky-400"
+                className="w-full bg-[var(--surface-hover)] border border-[var(--line)] rounded-lg text-[var(--text-1)] px-3 py-1.5 text-xs outline-none focus:border-[var(--accent)]"
               />
             </div>
 
-            <div className="bg-[#0b1322] border border-emerald-500/25 rounded-lg p-3 text-[11.5px] text-slate-300 flex items-start gap-2.5">
-              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="bg-[var(--surface-subtle)] border border-[var(--line)] rounded-lg p-3 text-xs text-[var(--text-2)] flex items-start gap-2.5">
+              <ShieldCheck className="w-4 h-4 text-[var(--ok)] shrink-0 mt-0.5" />
               <div>
-                File PDF được kết xuất chuẩn trang <strong>A4 (150 DPI)</strong> hỗ trợ đầy đủ <strong>Tiếng Việt có dấu</strong>, tự động ẩn mật khẩu <code className="text-sky-300 font-mono">•••••••• (SHA-512)</code> và đính kèm dấu xác nhận kiểm duyệt an ninh.
+                File PDF được kết xuất chuẩn trang <strong>A4 (150 DPI)</strong> hỗ trợ đầy đủ <strong>Tiếng Việt có dấu</strong>, tự động che thông tin nhạy cảm và đính kèm dấu xác nhận an ninh.
               </div>
             </div>
           </div>
 
           {/* Right 6 cols: Live A4 Page Preview */}
-          <div className="lg:col-span-6 bg-[#080d17] border border-white/10 rounded-xl p-3.5 flex flex-col justify-between">
+          <div className="lg:col-span-6 bg-[var(--surface-subtle)] border border-[var(--line)] rounded-xl p-3.5 flex flex-col justify-between">
             <div className="flex items-center justify-between mb-2.5">
-              <span className="text-[11.5px] font-bold text-slate-200 flex items-center gap-2">
-                <span>Bản xem trước Trang A4 Thời gian thực</span>
-                <span className="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono text-[10.5px]">
+              <span className="text-xs font-semibold text-[var(--text-2)] flex items-center gap-2">
+                <span>Bản xem trước A4</span>
+                <span className="px-2 py-0.5 rounded bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--text-2)] font-mono text-xs">
                   {totalPages} trang
                 </span>
               </span>
@@ -350,19 +365,21 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
               {totalPages > 1 && (
                 <div className="flex items-center gap-1.5">
                   <button
+                    type="button"
                     onClick={() => setPreviewPageIndex((p) => Math.max(0, p - 1))}
                     disabled={safePageIdx === 0}
-                    className="p-1 rounded bg-[#131e33] border border-white/10 text-slate-300 hover:text-white disabled:opacity-40 cursor-pointer"
+                    className="w-6 h-6 rounded flex items-center justify-center bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--text-2)] hover:text-[var(--text-1)] disabled:opacity-40 cursor-pointer focus-visible:ring"
                   >
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
-                  <span className="font-mono text-[11px] text-slate-300">
+                  <span className="font-mono text-xs text-[var(--text-3)]">
                     Trang {safePageIdx + 1} / {totalPages}
                   </span>
                   <button
+                    type="button"
                     onClick={() => setPreviewPageIndex((p) => Math.min(totalPages - 1, p + 1))}
                     disabled={safePageIdx >= totalPages - 1}
-                    className="p-1 rounded bg-[#131e33] border border-white/10 text-slate-300 hover:text-white disabled:opacity-40 cursor-pointer"
+                    className="w-6 h-6 rounded flex items-center justify-center bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--text-2)] hover:text-[var(--text-1)] disabled:opacity-40 cursor-pointer focus-visible:ring"
                   >
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
@@ -370,22 +387,22 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
               )}
             </div>
 
-            <div className="flex-1 flex items-center justify-center bg-[#05080f] rounded-lg p-2 border border-white/5 overflow-hidden">
+            <div className="flex-1 flex items-center justify-center bg-[var(--bg)] rounded-lg p-2 border border-[var(--line)] overflow-hidden">
               {renderedPdf.pageDataUrls[safePageIdx] ? (
                 <img
                   src={renderedPdf.pageDataUrls[safePageIdx]}
                   alt={`Xem trước báo cáo PDF trang ${safePageIdx + 1}`}
-                  className="max-h-[410px] w-auto object-contain rounded shadow-lg border border-white/15"
+                  className="max-h-[410px] w-auto object-contain rounded shadow-md border border-[var(--line)]"
                 />
               ) : (
-                <div className="text-slate-500 text-[12px] py-16">
+                <div className="text-[var(--text-3)] text-xs py-16">
                   Đang tạo bản xem trước PDF...
                 </div>
               )}
             </div>
 
-            <div className="mt-2.5 flex items-center justify-between text-[11px] text-slate-400 font-mono">
-              <span>Định dạng: PDF 1.4 Chuẩn A4</span>
+            <div className="mt-2.5 flex items-center justify-between text-xs text-[var(--text-3)] font-mono">
+              <span>Định dạng: PDF 1.4 A4</span>
               <span>
                 Dung lượng: ~{Math.max(12, Math.round(renderedPdf.pdfBytes.length / 1024))} KB
               </span>
@@ -394,22 +411,24 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3.5 border-t border-white/10 bg-[#0c1424] flex items-center justify-between flex-wrap gap-2">
-          <div className="text-[11.5px] text-slate-400">
-            Sẵn sàng xuất: <strong className="text-sky-300 font-mono">{reportModel.alertRows.length}</strong> cảnh báo IDS &amp;{' '}
-            <strong className="text-emerald-300 font-mono">{reportModel.auditRows.length}</strong> bản ghi Audit Log
+        <div className="px-5 py-3.5 border-t border-[var(--line)] bg-[var(--surface)] flex items-center justify-between flex-wrap gap-2">
+          <div className="text-xs text-[var(--text-3)]">
+            Sẵn sàng xuất: <strong className="text-[var(--text-1)] font-mono">{reportModel.alertRows.length}</strong> cảnh báo &amp;{' '}
+            <strong className="text-[var(--text-1)] font-mono">{reportModel.auditRows.length}</strong> bản ghi kiểm toán
           </div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={handleDownloadPdf}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 border border-sky-400 text-white text-[12.5px] font-bold transition-all shadow-md shadow-sky-950/60 cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[var(--accent)] hover:opacity-90 text-white text-xs font-semibold transition-all shadow-xs cursor-pointer focus-visible:ring"
             >
               <FileDown className="w-4 h-4" />
               <span>Tải xuống File PDF (.pdf)</span>
             </button>
             <button
+              type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[12px] font-semibold transition-all cursor-pointer"
+              className="px-4 py-2 rounded-lg bg-[var(--surface-hover)] hover:bg-[var(--surface-subtle)] border border-[var(--line)] text-[var(--text-2)] hover:text-[var(--text-1)] text-xs font-medium transition-colors cursor-pointer focus-visible:ring"
             >
               Đóng
             </button>

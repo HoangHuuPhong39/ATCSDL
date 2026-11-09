@@ -29,11 +29,15 @@ venv.bak/
 .ids_state.json
 dashboardweb/.ids_state.json
 oracle/.ids_state.json
+.dashboard_state.json
+dashboardweb/.dashboard_state.json
 
 # AI Studio & IDE settings
 .aistudio/
 .vscode/
 .idea/
+.impeccable/
+dashboardweb/.impeccable/
 *.swp
 *.swo
 .DS_Store

@@ -84,3 +84,24 @@ export function maskCmnd(cmnd: string, enabled: boolean = true): string {
   if (clean.length <= 4) return '••••••••';
   return `${clean.slice(0, 3)}••••••${clean.slice(-2)}`;
 }
+
+/**
+ * Masks employee full name e.g. "Nguyen Van A" -> "Nguyen •••• A"
+ */
+export function maskEmployeeName(name: string, enabled: boolean = true): string {
+  if (!name) return '—';
+  if (!enabled) return name;
+  const clean = name.trim();
+  const parts = clean.split(/\s+/);
+  if (parts.length <= 1) return `${clean[0]}••••`;
+  return `${parts[0]} •••• ${parts[parts.length - 1]}`;
+}
+
+/**
+ * Masks salary e.g. 900 -> "••••••"
+ */
+export function maskSalary(salary: number | string, enabled: boolean = true): string {
+  if (salary === undefined || salary === null) return '—';
+  if (!enabled) return typeof salary === 'number' ? salary.toLocaleString() : String(salary);
+  return '••••••';
+}

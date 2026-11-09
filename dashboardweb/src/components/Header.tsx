@@ -1,23 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Activity,
-  RefreshCw,
-  Database,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
   SlidersHorizontal,
   Maximize2,
   Minimize2,
-  LayoutGrid,
   EyeOff,
   Eye,
   FileDown,
+  Sun,
+  Moon,
+  MoreHorizontal,
+  Database,
+  RefreshCw,
 } from 'lucide-react';
 import { ActiveTab } from '../types/ids';
+import { StatusDot } from './ui/StatusDot';
 
 export type LayoutWidthMode = 'fluid' | 'boxed' | 'compact';
 export type UiDensityMode = 'comfortable' | 'compact';
+export type ThemeMode = 'dark' | 'light';
 
 interface HeaderProps {
   activeTab: ActiveTab;
@@ -26,6 +29,7 @@ interface HeaderProps {
   onOpenOracleBridge: () => void;
   onOpenPdfExport: () => void;
   isBridgeConnected: boolean;
+  lastSyncTime?: string | null;
   privacyMode: boolean;
   onTogglePrivacyMode: () => void;
   isSidebarCollapsed: boolean;
@@ -35,6 +39,8 @@ interface HeaderProps {
   onChangeLayoutWidth: (mode: LayoutWidthMode) => void;
   uiDensity: UiDensityMode;
   onChangeUiDensity: (density: UiDensityMode) => void;
+  themeMode?: ThemeMode;
+  onToggleThemeMode?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -44,6 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenOracleBridge,
   onOpenPdfExport,
   isBridgeConnected,
+  lastSyncTime,
   privacyMode,
   onTogglePrivacyMode,
   isSidebarCollapsed,
@@ -53,83 +60,92 @@ export const Header: React.FC<HeaderProps> = ({
   onChangeLayoutWidth,
   uiDensity,
   onChangeUiDensity,
+  themeMode = 'dark',
+  onToggleThemeMode,
 }) => {
-  const [customizerOpen, setCustomizerOpen] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
+  const [uiMenuOpen, setUiMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+
+  const uiMenuRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        setCustomizerOpen(false);
+      if (uiMenuRef.current && !uiMenuRef.current.contains(e.target as Node)) {
+        setUiMenuOpen(false);
+      }
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreMenuOpen(false);
       }
     };
-    if (customizerOpen) {
+    if (uiMenuOpen || moreMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [customizerOpen]);
+  }, [uiMenuOpen, moreMenuOpen]);
 
   const getTitles = (): { title: string; subtitle: string } => {
     switch (activeTab) {
       case 'home':
         return {
-          title: 'Trung tâm Điều hành An ninh CSDL (Oracle DB-IDS SOC)',
-          subtitle: 'Giám sát trực tiếp từ Oracle 23ai (FREEPDB1) · Biểu đồ Nhiệt & Phân tích Đa chiều',
+          title: 'Tổng quan SOC',
+          subtitle: 'Giám sát an ninh CSDL Oracle 23ai (FREEPDB1)',
         };
       case 'alerts':
         return {
-          title: 'Danh sách Cảnh báo Xâm nhập & Chấm điểm Rủi ro (IDS Alerts)',
-          subtitle: 'Phân loại 6 kỹ thuật tấn công DBMS & 4 kiểu suy diễn thống kê SDB theo mức độ',
+          title: 'Cảnh báo IDS',
+          subtitle: 'Phát hiện tấn công DBMS & suy diễn thống kê SDB',
         };
       case 'fga':
         return {
-          title: 'Kiểm toán Mịn (DBMS_FGA) & Bẫy Dữ liệu Honeytoken',
-          subtitle: 'Policies: FGA_HONEYTOKEN_TRAP (manv="NV_TRAP") & FGA_HIGH_SALARY_ACCESS (lương >= 1000)',
+          title: 'Bẫy FGA',
+          subtitle: 'Kiểm toán hạt mịn & bẫy Honeytoken (SYS.NV)',
         };
       case 'triggers':
         return {
-          title: 'Hành vi bị chặn tức thời bởi Database Trigger (Autonomous Transaction)',
-          subtitle: 'SYS.TRG_PROTECT_NV · Ngăn chặn xóa nhân viên (ORA-20001) & Chặn tăng lương > 50% (ORA-20002)',
+          title: 'Trigger chặn',
+          subtitle: 'Ngăn chặn tức thời qua Autonomous Transaction',
         };
       case 'audit':
         return {
-          title: 'Nhật ký Kiểm toán Hợp nhất Thời gian thực (UNIFIED_AUDIT_TRAIL)',
-          subtitle: 'Truy vết toàn diện câu lệnh SQL, Return Code, OS User, Host và Client Application',
-        };
-      case 'users':
-        return {
-          title: 'Hồ sơ Tài khoản CSDL & Dữ liệu Bảng Nhạy cảm (SYS.NV)',
-          subtitle: 'Quản lý dữ liệu gốc SYS.NV, bản ghi bẫy Honeytoken (NV_TRAP) và hồ sơ phiên chuẩn',
+          title: 'Nhật ký kiểm toán',
+          subtitle: 'UNIFIED_AUDIT_TRAIL thời gian thực',
         };
       case 'ips':
         return {
-          title: 'Phản ứng Đa cấp Tự động & Điều khiển Cách ly (Active IPS)',
-          subtitle: 'Cấu hình Auto-Response, Ma trận Phòng thủ L0–L3 và Bảng Điều khiển Khóa / Hạ quyền Read-Only',
+          title: 'Phản ứng IPS',
+          subtitle: 'Điều khiển cách ly L0–L3 và khóa tài khoản',
+        };
+      case 'users':
+        return {
+          title: 'Hồ sơ tài khoản',
+          subtitle: 'Quản trị quyền và dữ liệu bảng SYS.NV',
         };
       case 'docs':
         return {
-          title: 'Báo cáo Đề tài & Tài liệu Kiến trúc Chuyên sâu',
-          subtitle: 'Hệ thống phân loại tấn công, Mô hình toán học SDB Inference, Kiến trúc 5 tầng & Mã nguồn PL/SQL',
+          title: 'Báo cáo đề tài',
+          subtitle: 'Kiến trúc hệ thống và tài liệu kỹ thuật',
         };
       default:
         return {
-          title: 'Hệ thống Phát hiện Xâm nhập CSDL Oracle',
+          title: 'Oracle DB-IDS',
           subtitle: 'Defense-in-Depth & Active IPS',
         };
     }
   };
 
   const { title, subtitle } = getTitles();
+  const shortSyncTime = lastSyncTime ? lastSyncTime.substring(11, 19) : null;
 
   return (
-    <header className="h-16 bg-[#0e1626]/95 border-b border-[#38bdf8]/15 px-3 sm:px-5 flex items-center justify-between gap-2.5 sticky top-0 z-30 backdrop-blur-md">
-      {/* Left Zone: Sidebar toggles + Contextual Page Title */}
-      <div className="flex items-center gap-2.5 min-w-0">
+    <header className="h-16 bg-[var(--surface)] border-b border-[var(--line)] px-4 sm:px-6 flex items-center justify-between gap-3 sticky top-0 z-30">
+      {/* Left Zone: Sidebar toggles + Concise Title (1 title + 1 line subtitle) */}
+      <div className="flex items-center gap-3 min-w-0">
         {/* Mobile Hamburger Button */}
         <button
           onClick={onOpenMobileMenu}
           aria-label="Mở menu điều hướng"
-          className="lg:hidden p-2 rounded-lg bg-[#131e33] border border-sky-500/20 text-slate-200 hover:text-white hover:border-sky-400 transition-colors cursor-pointer shrink-0"
+          className="lg:hidden w-8 h-8 rounded-lg bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--text-2)] hover:text-[var(--text-1)] flex items-center justify-center transition-colors cursor-pointer shrink-0 focus-visible:ring"
         >
           <Menu className="w-4 h-4" />
         </button>
@@ -138,149 +154,133 @@ export const Header: React.FC<HeaderProps> = ({
         <button
           onClick={onToggleSidebarCollapse}
           aria-label={isSidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}
-          title={isSidebarCollapsed ? 'Mở rộng thanh bên (Sidebar)' : 'Thu gọn thanh bên (Sidebar)'}
-          className="hidden lg:flex p-2 rounded-lg bg-[#131e33] border border-sky-500/20 text-slate-300 hover:text-white hover:border-sky-400 transition-colors cursor-pointer shrink-0"
+          title={isSidebarCollapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên'}
+          className="hidden lg:flex w-8 h-8 rounded-lg bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--text-2)] hover:text-[var(--text-1)] items-center justify-center transition-colors cursor-pointer shrink-0 focus-visible:ring"
         >
           {isSidebarCollapsed ? (
-            <PanelLeftOpen className="w-4 h-4 text-sky-400" />
+            <PanelLeftOpen className="w-4 h-4 text-[var(--accent)]" />
           ) : (
-            <PanelLeftClose className="w-4 h-4 text-sky-400" />
+            <PanelLeftClose className="w-4 h-4 text-[var(--text-2)]" />
           )}
         </button>
 
-        <div className="hidden sm:flex w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-400/20 items-center justify-center text-sky-400 shrink-0">
-          <Activity className="w-4 h-4" />
-        </div>
-
         <div className="min-w-0">
-          <h1 className="text-[13px] sm:text-[14px] font-bold text-slate-100 tracking-tight truncate">
+          <h1 className="text-sm font-semibold text-[var(--text-1)] tracking-tight truncate leading-tight">
             {title}
           </h1>
-          <p className="text-[11px] text-slate-400 truncate mt-0.5 hidden md:block">{subtitle}</p>
+          <p className="text-xs text-[var(--text-3)] truncate mt-0.5 hidden sm:block leading-tight">
+            {subtitle}
+          </p>
         </div>
       </div>
 
-      {/* Right Zone: Confidentiality Mask Toggle + Oracle Live Bridge + Customizer + Flush Audit */}
+      {/* Right Zone: Exactly 4 minimalist elements */}
       <div className="flex items-center gap-2 shrink-0">
-        {/* Privacy / Credential Mask Toggle */}
+        {/* 1. Connection status dot + sync time */}
+        <div
+          role="status"
+          aria-live="polite"
+          title={
+            isBridgeConnected
+              ? `Đang kết nối Oracle 23ai (FREEPDB1)${shortSyncTime ? ` · Đồng bộ lúc ${shortSyncTime}` : ''}`
+              : `Oracle Bridge sẵn sàng${shortSyncTime ? ` · Đồng bộ lúc ${shortSyncTime}` : ''}`
+          }
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--surface-hover)] border border-[var(--line)] text-xs font-mono text-[var(--text-2)] tabular-nums"
+        >
+          <StatusDot status={isBridgeConnected ? 'ok' : 'warn'} pulse={isRefreshing} size="sm" />
+          <span className="hidden sm:inline font-sans text-xs text-[var(--text-3)]">Đồng bộ:</span>
+          <span>{shortSyncTime || 'Tự động'}</span>
+          {isRefreshing && (
+            <RefreshCw className="w-3 h-3 text-[var(--accent)] spin-active ml-0.5" />
+          )}
+        </div>
+
+        {/* 2. Privacy Mode Toggle (Icon + Tooltip, min 32px) */}
         <button
           onClick={onTogglePrivacyMode}
-          aria-label={privacyMode ? 'Đang ẩn thông tin nhạy cảm' : 'Đang hiện tên tài khoản'}
+          aria-label={privacyMode ? 'Đang ẩn thông tin nhạy cảm (Bảo mật định danh)' : 'Đang hiện thông tin định danh'}
           title={
             privacyMode
-              ? 'Đang BẬT chế độ bảo mật: Ẩn Username, Host, CMND & Mật khẩu (Nhấn để hiện định danh)'
-              : 'Đang hiển thị Username & Host phục vụ kiểm tra (Mật khẩu luôn được mã hóa ẩn)'
+              ? 'Bảo mật định danh: BẬT (Đang che Username, Host, OS User, CMND). Nhấn để hiện.'
+              : 'Bảo mật định danh: TẮT (Đang hiện Username, Host). Nhấn để che.'
           }
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11.5px] font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+          className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors cursor-pointer shrink-0 focus-visible:ring ${
             privacyMode
-              ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25'
-              : 'bg-[#131e33] border-amber-500/35 text-amber-300 hover:bg-amber-500/15'
+              ? 'bg-[var(--ok-soft)] border-[var(--ok)]/30 text-[var(--ok)]'
+              : 'bg-[var(--surface-hover)] border-[var(--line)] text-[var(--text-3)] hover:text-[var(--text-1)]'
           }`}
         >
-          {privacyMode ? (
-            <>
-              <EyeOff className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">Bảo mật định danh: ON</span>
-            </>
-          ) : (
-            <>
-              <Eye className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Bảo mật định danh: OFF</span>
-            </>
-          )}
+          {privacyMode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
         </button>
 
-        {/* Live Oracle SQL Developer Sync Button */}
-        <button
-          onClick={onOpenOracleBridge}
-          title="Kết nối & nhận cảnh báo trực tiếp khi thực thi câu lệnh trên Oracle SQL Developer"
-          className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#131e33] border border-sky-500/35 text-sky-300 hover:bg-sky-500/20 hover:text-white text-[11.5px] font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0"
-        >
-          <span
-            className={`w-2 h-2 rounded-full ${
-              isBridgeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-sky-400'
-            }`}
-          />
-          <Database className="w-3.5 h-3.5 text-sky-400 hidden sm:inline" />
-          <span>Oracle Live Sync</span>
-        </button>
-
-        {/* Export PDF Security Report Button */}
-        <button
-          onClick={onOpenPdfExport}
-          title="Xuất dữ liệu Cảnh báo IDS và Nhật ký Kiểm toán (Audit Logs) sang định dạng PDF"
-          className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-purple-500/15 border border-purple-500/40 text-purple-200 hover:bg-purple-500/25 hover:text-white text-[11.5px] font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0"
-        >
-          <FileDown className="w-3.5 h-3.5 text-purple-300" />
-          <span>Xuất PDF</span>
-        </button>
-
-        {/* Screen & Layout Customizer Popover */}
-        <div className="relative" ref={popoverRef}>
+        {/* 3. Combined UI Customizer Dropdown ("Giao diện": theme / width / density) */}
+        <div className="relative" ref={uiMenuRef}>
           <button
-            onClick={() => setCustomizerOpen((prev) => !prev)}
+            onClick={() => {
+              setUiMenuOpen((prev) => !prev);
+              setMoreMenuOpen(false);
+            }}
             aria-label="Tùy chỉnh giao diện"
-            title="Tùy chỉnh kích thước khung nhìn & mật độ hiển thị"
-            className={`inline-flex items-center gap-1.5 p-2 sm:px-2.5 sm:py-1.5 rounded-lg border text-[12px] font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
-              customizerOpen
-                ? 'bg-sky-500/20 border-sky-400 text-sky-300'
-                : 'bg-[#131e33] border-sky-500/20 text-slate-300 hover:text-white hover:border-sky-400/50'
+            aria-expanded={uiMenuOpen}
+            aria-haspopup="true"
+            title="Tùy chỉnh giao diện (Chủ đề, Khung nhìn, Mật độ bảng)"
+            className={`h-8 px-2.5 rounded-lg border flex items-center gap-1.5 text-xs font-medium transition-colors cursor-pointer shrink-0 focus-visible:ring ${
+              uiMenuOpen
+                ? 'bg-[var(--surface-hover)] border-[var(--accent)] text-[var(--text-1)]'
+                : 'bg-[var(--surface-hover)] border-[var(--line)] text-[var(--text-2)] hover:text-[var(--text-1)]'
             }`}
           >
-            <SlidersHorizontal className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden xl:inline">Giao diện</span>
+            <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--accent)]" />
+            <span className="hidden md:inline">Giao diện</span>
           </button>
 
-          {customizerOpen && (
-            <div className="absolute right-0 mt-2 w-72 bg-[#0e1626] border border-sky-500/30 rounded-xl shadow-2xl shadow-black/80 p-4 z-50 space-y-4">
-              <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-                <div className="flex items-center gap-2 text-[12.5px] font-bold text-slate-100">
-                  <LayoutGrid className="w-4 h-4 text-sky-400" />
-                  <span>Tùy chỉnh Khung nhìn &amp; Bố cục</span>
-                </div>
+          {uiMenuOpen && (
+            <div className="absolute right-0 mt-2 w-72 bg-[var(--surface)] border border-[var(--line)] rounded-xl shadow-xl p-3.5 z-50 space-y-3.5">
+              <div className="text-xs font-semibold text-[var(--text-1)] border-b border-[var(--line)] pb-2">
+                Tùy chỉnh giao diện
               </div>
 
-              {/* Option 1: Sidebar state */}
-              <div className="space-y-1.5 hidden lg:block">
-                <label className="text-[11px] font-semibold text-slate-400 block">
-                  Thanh điều hướng bên (Sidebar)
-                </label>
-                <div className="grid grid-cols-2 gap-1.5 p-1 bg-[#090e17] rounded-lg border border-white/5">
-                  <button
-                    onClick={() => isSidebarCollapsed && onToggleSidebarCollapse()}
-                    className={`px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
-                      !isSidebarCollapsed
-                        ? 'bg-sky-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Mở rộng (256px)
-                  </button>
-                  <button
-                    onClick={() => !isSidebarCollapsed && onToggleSidebarCollapse()}
-                    className={`px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
-                      isSidebarCollapsed
-                        ? 'bg-sky-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    Thu gọn (74px)
-                  </button>
+              {/* Theme Mode */}
+              {onToggleThemeMode && (
+                <div className="space-y-1.5">
+                  <div className="text-xs text-[var(--text-3)]">Chủ đề màu sắc</div>
+                  <div className="grid grid-cols-2 gap-1.5 p-1 bg-[var(--surface-hover)] rounded-lg border border-[var(--line)]">
+                    <button
+                      onClick={() => themeMode !== 'dark' && onToggleThemeMode()}
+                      className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                        themeMode === 'dark'
+                          ? 'bg-[var(--surface)] text-[var(--text-1)] shadow-sm'
+                          : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
+                      }`}
+                    >
+                      <Moon className="w-3.5 h-3.5" />
+                      <span>Tối (SOC)</span>
+                    </button>
+                    <button
+                      onClick={() => themeMode !== 'light' && onToggleThemeMode()}
+                      className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
+                        themeMode === 'light'
+                          ? 'bg-[var(--surface)] text-[var(--text-1)] shadow-sm'
+                          : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
+                      }`}
+                    >
+                      <Sun className="w-3.5 h-3.5" />
+                      <span>Sáng (Chiếu)</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Option 2: Viewport Container Width */}
+              {/* Viewport Width */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-slate-400 block">
-                  Độ rộng Khung nội dung theo màn hình
-                </label>
-                <div className="grid grid-cols-3 gap-1 p-1 bg-[#090e17] rounded-lg border border-white/5">
+                <div className="text-xs text-[var(--text-3)]">Độ rộng khung nhìn</div>
+                <div className="grid grid-cols-3 gap-1 p-1 bg-[var(--surface-hover)] rounded-lg border border-[var(--line)]">
                   <button
                     onClick={() => onChangeLayoutWidth('fluid')}
-                    className={`px-2 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer flex items-center justify-center gap-1 ${
+                    className={`px-1.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-1 ${
                       layoutWidth === 'fluid'
-                        ? 'bg-sky-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-[var(--surface)] text-[var(--text-1)] shadow-sm'
+                        : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
                     }`}
                   >
                     <Maximize2 className="w-3 h-3" />
@@ -288,53 +288,51 @@ export const Header: React.FC<HeaderProps> = ({
                   </button>
                   <button
                     onClick={() => onChangeLayoutWidth('boxed')}
-                    className={`px-2 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                    className={`px-1.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
                       layoutWidth === 'boxed'
-                        ? 'bg-sky-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-[var(--surface)] text-[var(--text-1)] shadow-sm'
+                        : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
                     }`}
                   >
-                    Chuẩn 1600
+                    1600px
                   </button>
                   <button
                     onClick={() => onChangeLayoutWidth('compact')}
-                    className={`px-2 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer flex items-center justify-center gap-1 ${
+                    className={`px-1.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer flex items-center justify-center gap-1 ${
                       layoutWidth === 'compact'
-                        ? 'bg-sky-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-[var(--surface)] text-[var(--text-1)] shadow-sm'
+                        : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
                     }`}
                   >
                     <Minimize2 className="w-3 h-3" />
-                    <span>Gọn 1280</span>
+                    <span>1280px</span>
                   </button>
                 </div>
               </div>
 
-              {/* Option 3: UI Density */}
+              {/* Table Density */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-slate-400 block">
-                  Mật độ Bảng dữ liệu (Table Density)
-                </label>
-                <div className="grid grid-cols-2 gap-1.5 p-1 bg-[#090e17] rounded-lg border border-white/5">
+                <div className="text-xs text-[var(--text-3)]">Mật độ bảng dữ liệu</div>
+                <div className="grid grid-cols-2 gap-1.5 p-1 bg-[var(--surface-hover)] rounded-lg border border-[var(--line)]">
                   <button
                     onClick={() => onChangeUiDensity('comfortable')}
-                    className={`px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                    className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
                       uiDensity === 'comfortable'
-                        ? 'bg-sky-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-[var(--surface)] text-[var(--text-1)] shadow-sm'
+                        : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
                     }`}
                   >
-                    Thoáng (Chuẩn)
+                    Thoáng
                   </button>
                   <button
                     onClick={() => onChangeUiDensity('compact')}
-                    className={`px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                    className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
                       uiDensity === 'compact'
-                        ? 'bg-sky-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
+                        ? 'bg-[var(--surface)] text-[var(--text-1)] shadow-sm'
+                        : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
                     }`}
                   >
-                    Thu gọn (Dense)
+                    Thu gọn
                   </button>
                 </div>
               </div>
@@ -342,15 +340,64 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* Flush Audit button */}
-        <button
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-lg bg-sky-600 border border-sky-400 hover:bg-sky-500 text-white text-[12px] font-semibold transition-all shadow-sm shadow-sky-900/50 cursor-pointer disabled:opacity-50 whitespace-nowrap shrink-0"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'spin-active' : ''}`} />
-          <span className="hidden sm:inline">Đồng bộ Oracle</span>
-        </button>
+        {/* 4. More Actions Menu "⋯" (PDF export, Oracle connection, manual sync) */}
+        <div className="relative" ref={moreMenuRef}>
+          <button
+            onClick={() => {
+              setMoreMenuOpen((prev) => !prev);
+              setUiMenuOpen(false);
+            }}
+            aria-label="Thao tác khác"
+            aria-expanded={moreMenuOpen}
+            aria-haspopup="true"
+            title="Thao tác khác (Xuất PDF, Kết nối Oracle, Đồng bộ)"
+            className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors cursor-pointer shrink-0 focus-visible:ring ${
+              moreMenuOpen
+                ? 'bg-[var(--surface-hover)] border-[var(--accent)] text-[var(--text-1)]'
+                : 'bg-[var(--surface-hover)] border-[var(--line)] text-[var(--text-2)] hover:text-[var(--text-1)]'
+            }`}
+          >
+            <MoreHorizontal className="w-4 h-4" />
+          </button>
+
+          {moreMenuOpen && (
+            <div className="absolute right-0 mt-2 w-56 bg-[var(--surface)] border border-[var(--line)] rounded-xl shadow-xl p-1.5 z-50 space-y-0.5">
+              <button
+                onClick={() => {
+                  onOpenPdfExport();
+                  setMoreMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--text-2)] hover:text-[var(--text-1)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer text-left focus-visible:ring"
+              >
+                <FileDown className="w-4 h-4 text-[var(--accent)]" />
+                <span>Xuất báo cáo PDF</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  onOpenOracleBridge();
+                  setMoreMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--text-2)] hover:text-[var(--text-1)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer text-left focus-visible:ring"
+              >
+                <Database className="w-4 h-4 text-[var(--ok)]" />
+                <span>Kết nối Oracle Bridge</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  onRefresh();
+                  setMoreMenuOpen(false);
+                }}
+                disabled={isRefreshing}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium text-[var(--text-2)] hover:text-[var(--text-1)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer text-left disabled:opacity-50 focus-visible:ring"
+              >
+                <RefreshCw className={`w-4 h-4 text-[var(--text-3)] ${isRefreshing ? 'spin-active' : ''}`} />
+                <span>Đồng bộ thủ công</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

@@ -1,11 +1,13 @@
 import type { AlertItem, AuditLogRow, DbUser, Employee, FgaEvent, TriggerAlert } from '../types/ids.ts';
 
 export const INITIAL_EMPLOYEES: Employee[] = [
-  { MANV: 'NV1', HOTEN: 'Nguyễn Văn A', LUONG: 900, GIOITINH: 'Nam', CMND: '001206012345' },
-  { MANV: 'NV2', HOTEN: 'Trần Thị B', LUONG: 850, GIOITINH: 'Nữ', CMND: '001206099999' },
-  { MANV: 'NV3', HOTEN: 'Lê Văn C', LUONG: 1200, GIOITINH: 'Nam', CMND: '001206088888' },
-  { MANV: 'NV4', HOTEN: 'Phạm Thị D', LUONG: 950, GIOITINH: 'Nữ', CMND: '001206534243' },
-  { MANV: 'NV_TRAP', HOTEN: 'Hoàng Văn Sếp (VIP)', LUONG: 99999, GIOITINH: 'Nam', CMND: '001099000000' },
+  { MANV: 'NV1', CHUCVU: 'Tổ Trưởng', HOTEN: 'Nguyễn Văn An', LUONG: 900, GIOITINH: 'Nam', CMND: '001206012345' },
+  { MANV: 'NV2', CHUCVU: 'Nhân Viên', HOTEN: 'Trần Thị Giang', LUONG: 850, GIOITINH: 'Nữ', CMND: '001206099999' },
+  { MANV: 'NV3', CHUCVU: 'Kế Toán', HOTEN: 'Lê Văn Nghị', LUONG: 1200, GIOITINH: 'Nam', CMND: '001206088888' },
+  { MANV: 'NV4', CHUCVU: 'Nhân Sự', HOTEN: 'Phạm Thị Hồng Nhung', LUONG: 950, GIOITINH: 'Nữ', CMND: '001206534243' },
+  { MANV: 'NV5', CHUCVU: 'Nhân Sự', HOTEN: 'Lê Hoàng Vũ', LUONG: 1000, GIOITINH: 'Nam', CMND: '001205432124' },
+  { MANV: 'NV6', CHUCVU: 'Nhân Viên', HOTEN: 'Hoàng Gia Bách', LUONG: 800, GIOITINH: 'Nam', CMND: '001205987123' },
+  { MANV: 'NV_TRAP', CHUCVU: 'VIP (Bẫy)', HOTEN: 'Hoàng Văn Sếp (VIP)', LUONG: 99999, GIOITINH: 'Nam', CMND: '001099000000' },
 ];
 
 export const INITIAL_USERS: DbUser[] = [

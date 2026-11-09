@@ -1,24 +1,24 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
-  ShieldAlert,
   ArrowRight,
-  Target,
-  Zap,
   Database,
-  Activity,
-  Layers,
-  Users,
-  Eye,
   CheckCircle2,
   CheckCheck,
-  RotateCcw,
+  Trash2,
+  Unlock,
+  Lock,
+  ShieldCheck,
+  ShieldAlert,
   FileDown,
+  Info,
 } from 'lucide-react';
 import { AlertItem, DbUser, FgaEvent, Metrics, TriggerAlert, ActiveTab } from '../../types/ids';
 import { KpiCards } from '../KpiCards';
 import { AttackHeatmap } from '../AttackHeatmap';
 import { computeAttackBreakdown, getRiskColorHex } from '../../utils/analytics';
 import { maskUsername } from '../../utils/privacy';
+import { Card } from '../ui/Card';
+import { StatusDot } from '../ui/StatusDot';
 
 interface OverviewTabProps {
   metrics: Metrics;
@@ -36,6 +36,7 @@ interface OverviewTabProps {
   onMarkAllReviewed: () => void;
   onResetReviewedAll: () => void;
   onResetAllAfterAudit: () => void;
+  onUserAction?: (username: string, action: 'lock' | 'unlock' | 'revoke_dml' | 'grant_dml') => void;
 }
 
 export const OverviewTab: React.FC<OverviewTabProps> = ({
@@ -54,7 +55,61 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   onMarkAllReviewed,
   onResetReviewedAll,
   onResetAllAfterAudit,
+  onUserAction,
 }) => {
+  // 2-step confirmation state with 3-second auto-revert
+  const [confirmLockUser, setConfirmLockUser] = useState<string | null>(null);
+  const [confirmMarkAll, setConfirmMarkAll] = useState(false);
+  const [confirmResetAll, setConfirmResetAll] = useState(false);
+
+  const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const markAllTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resetAllTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+      if (markAllTimerRef.current) clearTimeout(markAllTimerRef.current);
+      if (resetAllTimerRef.current) clearTimeout(resetAllTimerRef.current);
+    };
+  }, []);
+
+  const handleLockUser = (username: string) => {
+    if (confirmLockUser === username) {
+      onUserAction?.(username, 'lock');
+      setConfirmLockUser(null);
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+    } else {
+      setConfirmLockUser(username);
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+      lockTimerRef.current = setTimeout(() => setConfirmLockUser(null), 3000);
+    }
+  };
+
+  const handleMarkAll = () => {
+    if (confirmMarkAll) {
+      onMarkAllReviewed();
+      setConfirmMarkAll(false);
+      if (markAllTimerRef.current) clearTimeout(markAllTimerRef.current);
+    } else {
+      setConfirmMarkAll(true);
+      if (markAllTimerRef.current) clearTimeout(markAllTimerRef.current);
+      markAllTimerRef.current = setTimeout(() => setConfirmMarkAll(false), 3000);
+    }
+  };
+
+  const handleResetAll = () => {
+    if (confirmResetAll) {
+      onResetAllAfterAudit();
+      setConfirmResetAll(false);
+      if (resetAllTimerRef.current) clearTimeout(resetAllTimerRef.current);
+    } else {
+      setConfirmResetAll(true);
+      if (resetAllTimerRef.current) clearTimeout(resetAllTimerRef.current);
+      resetAllTimerRef.current = setTimeout(() => setConfirmResetAll(false), 3000);
+    }
+  };
+
   const breakdown = useMemo(() => computeAttackBreakdown(alerts), [alerts]);
 
   const reviewedAlertsCount = useMemo(() => alerts.filter((a) => a.reviewed).length, [alerts]);
@@ -64,398 +119,444 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   const totalEventsAndAlerts = alerts.length + fgaEvents.length + triggers.length;
   const pendingReviewCount = totalEventsAndAlerts - totalReviewed;
 
+  // Sorted recent alerts (descending by time, top 8)
+  const sortedRecentAlerts = useMemo(() => {
+    return [...alerts]
+      .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+      .slice(0, 8);
+  }, [alerts]);
+
+  // Sorted users by risk descending
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => b.RISK_SCORE - a.RISK_SCORE);
+  }, [users]);
+
+  // Contained users count
+  const containedCount = useMemo(
+    () =>
+      users.filter(
+        (u) =>
+          u.ACCOUNT_STATUS.toUpperCase().includes('LOCK') ||
+          u.DML_STATUS.toUpperCase() === 'READ-ONLY'
+      ).length,
+    [users]
+  );
+
+  const cleanAttackName = (type: string) => {
+    return type.replace(/^\[.*?\]\s*/, '').trim();
+  };
+
+  const formatEventTime = (time: string) => {
+    if (!time) return '';
+    const parts = time.split(' ');
+    return parts.length > 1 ? parts[1] : time;
+  };
+
+  const getRiskStatus = (risk: number): 'danger' | 'warn' | 'ok' => {
+    if (risk >= 80) return 'danger';
+    if (risk >= 50) return 'warn';
+    return 'ok';
+  };
+
   return (
-    <div className="space-y-5">
-      {/* 1. Primary System KPI Strip (Shown ONLY on OverviewTab) */}
-      <KpiCards metrics={metrics} />
+    <div className="space-y-4">
+      {/* =========================================================================
+          HANG 1: 4 THE KPI TOI GIAN (Icon nho, Nhan, So lon, 1 dong phu)
+          ========================================================================= */}
+      <KpiCards metrics={metrics} onNavigateTab={onNavigateTab} />
 
-      {/* 1.5 SOC Audit Review & Reset Command Bar */}
-      <section className="bg-[#101b2e] border border-emerald-500/25 rounded-xl p-3.5 sm:px-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 shadow-lg shadow-black/25">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/35 flex items-center justify-center text-emerald-400 shrink-0">
-            <CheckCircle2 className="w-4 h-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[13px] font-bold text-slate-100">
-                Kiểm duyệt, Lưu trữ PDF &amp; Reset Sự kiện An ninh (Post-Audit Control)
-              </span>
-              <span className="text-[10.5px] font-mono px-2 py-0.5 rounded bg-[#0b1322] border border-white/10 text-slate-300">
-                Chờ duyệt: <strong className="text-amber-300 tabular-nums">{pendingReviewCount}</strong> · Đã duyệt:{' '}
-                <strong className="text-emerald-400 tabular-nums">{totalReviewed}</strong>
-              </span>
+      {/* =========================================================================
+          HANG 2: (xl: 3/5 + 2/5)
+          Trái: Sự kiện gần đây (1 dòng / sự kiện, hover actions)
+          Phải: Tài khoản bị hạn chế (Gộp containment banner + radar, scrollable)
+          ========================================================================= */}
+      <section className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+        {/* Trai 3/5: Card "Sự kiện gần đây" */}
+        <Card
+          title="Sự kiện gần đây"
+          className="xl:col-span-3 flex flex-col justify-between"
+          bodyClassName="p-3 sm:p-4 space-y-1"
+          right={
+            <button
+              onClick={() => onNavigateTab('alerts')}
+              aria-label="Xem tất cả cảnh báo"
+              className="inline-flex items-center gap-1 text-xs font-medium text-[var(--accent)] hover:underline cursor-pointer focus-visible:ring"
+            >
+              <span>Xem tất cả ({alerts.length})</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          }
+        >
+          {sortedRecentAlerts.length === 0 ? (
+            <div className="py-8 text-center text-xs text-[var(--text-3)] font-medium">
+              Không có sự kiện bất thường nào.
             </div>
-            <p className="text-[11px] text-slate-400 truncate">
-              Xuất hồ sơ bảo mật sang PDF để lưu trữ trước hoặc sau khi kiểm duyệt và Reset hàng đợi sự kiện.
-            </p>
-          </div>
-        </div>
+          ) : (
+            <div className="space-y-1">
+              {sortedRecentAlerts.map((a) => {
+                const isCritical = a.risk_score >= 80;
+                const isHigh = a.risk_score >= 50 && a.risk_score < 80;
+                const severityLabel = a.severity || (isCritical ? 'CRITICAL' : isHigh ? 'HIGH' : 'MED');
 
-        <div className="flex items-center gap-2 flex-wrap shrink-0">
-          {onOpenPdfExport && (
-            <button
-              onClick={onOpenPdfExport}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/15 border border-purple-500/40 text-purple-200 hover:bg-purple-500/25 text-[11.5px] font-semibold transition-all cursor-pointer whitespace-nowrap"
-              title="Xuất báo cáo Cảnh báo & Nhật ký Kiểm toán sang định dạng PDF"
-            >
-              <FileDown className="w-3.5 h-3.5 text-purple-300" />
-              <span>Xuất Hồ sơ PDF</span>
-            </button>
-          )}
-
-          {pendingReviewCount > 0 && (
-            <button
-              onClick={onMarkAllReviewed}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 text-[11.5px] font-semibold transition-all cursor-pointer whitespace-nowrap"
-            >
-              <CheckCheck className="w-3.5 h-3.5" />
-              <span>Duyệt tất cả ({pendingReviewCount})</span>
-            </button>
-          )}
-
-          {totalReviewed > 0 && (
-            <button
-              onClick={onResetReviewedAll}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/45 text-amber-200 hover:bg-amber-500/30 text-[11.5px] font-bold transition-all cursor-pointer whitespace-nowrap"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset mục đã duyệt ({totalReviewed})</span>
-            </button>
-          )}
-
-          {totalEventsAndAlerts > 0 && (
-            <button
-              onClick={onResetAllAfterAudit}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/15 border border-red-500/35 text-red-300 hover:bg-red-500/25 text-[11.5px] font-semibold transition-all cursor-pointer whitespace-nowrap"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Đã duyệt xong · Reset toàn bộ</span>
-            </button>
-          )}
-        </div>
-      </section>
-
-      {/* 2. Recharts Attack Intensity Heatmap (Time x User) */}
-      <AttackHeatmap
-        alerts={alerts}
-        users={users}
-        privacyMode={privacyMode}
-        onOpenAlertModal={onOpenAlertModal}
-        onOpenOracleBridge={onOpenOracleBridge}
-      />
-
-      {/* 3. Analytical Grid: Attack Vector Distribution (DBMS vs SDB) & User Risk Radar */}
-      <section className="grid grid-cols-1 xl:grid-cols-12 gap-5">
-        {/* Left 7 cols: Attack Taxonomy Distribution */}
-        <div className="xl:col-span-7 bg-[#101b2e] border border-sky-500/20 rounded-xl p-4 sm:p-5 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between flex-wrap gap-2 pb-3.5 border-b border-white/5">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
-                  <Layers className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="text-[13.5px] font-bold text-slate-100">
-                    Bản đồ Phân bổ Kỹ thuật Tấn công (DBMS Technical vs. SDB Inference)
-                  </h2>
-                  <p className="text-[11px] text-slate-400">
-                    Thống kê tỷ trọng 6 dạng tấn công kỹ thuật Hệ quản trị CSDL và 4 kiểu tấn công suy diễn CSDL Thống kê
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => onNavigateTab('alerts')}
-                className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-sky-400 hover:text-white transition-colors cursor-pointer whitespace-nowrap shrink-0"
-              >
-                <span>Mở bảng cảnh báo</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Dual Ratio Bar */}
-            <div className="mt-4 bg-[#0b1322] border border-white/5 rounded-lg p-3.5">
-              <div className="flex items-center justify-between text-[11.5px] font-semibold mb-2">
-                <span className="text-red-300 font-mono tabular-nums">
-                  Nhóm I: Kỹ thuật DBMS · {breakdown.dbmsCount} sự kiện ({breakdown.dbmsPercent}%)
-                </span>
-                <span className="text-amber-300 font-mono tabular-nums">
-                  Nhóm II: Suy diễn SDB · {breakdown.sdbCount} sự kiện ({breakdown.sdbPercent}%)
-                </span>
-              </div>
-              <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden flex">
-                <div
-                  className="h-full bg-red-500 transition-all duration-300"
-                  style={{ width: `${breakdown.dbmsPercent}%` }}
-                />
-                <div
-                  className="h-full bg-amber-400 transition-all duration-300"
-                  style={{ width: `${breakdown.sdbPercent}%` }}
-                />
-              </div>
-            </div>
-
-            {/* 10 Attack Techniques Breakdown Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-4">
-              {breakdown.byTechnique.map((tech) => {
-                const isSdb = tech.group === 'SDB';
                 return (
                   <div
-                    key={tech.id}
-                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#0b1322]/80 border border-white/5 text-[11.5px]"
+                    key={a.key}
+                    className="group flex items-center justify-between gap-2 py-1.5 px-2 rounded-lg hover:bg-[var(--surface-hover)] transition-colors border border-transparent hover:border-[var(--line)]"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => onOpenAlertModal(a)}
+                      className="flex-1 flex items-center gap-2.5 min-w-0 text-left cursor-pointer focus-visible:ring rounded"
+                    >
+                      <StatusDot status={getRiskStatus(a.risk_score)} size="sm" />
+                      <span className="font-mono text-xs text-[var(--text-3)] tabular-nums shrink-0">
+                        {formatEventTime(a.time)}
+                      </span>
                       <span
-                        className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                          isSdb
-                            ? 'bg-amber-500/15 text-amber-300'
-                            : 'bg-red-500/15 text-red-300'
+                        className="text-xs font-medium text-[var(--text-1)] truncate flex-1"
+                        title={a.attack_type}
+                      >
+                        {cleanAttackName(a.attack_type)}
+                      </span>
+                      <span className="font-mono text-xs text-[var(--text-2)] shrink-0">
+                        {maskUsername(a.user, privacyMode)}
+                      </span>
+                      <span
+                        className={`text-xs font-mono font-semibold shrink-0 ${
+                          isCritical
+                            ? 'text-[var(--danger)]'
+                            : isHigh
+                            ? 'text-[var(--warn)]'
+                            : 'text-[var(--ok)]'
                         }`}
                       >
-                        {tech.group}
+                        {severityLabel}
                       </span>
-                      <span className="text-slate-200 truncate" title={tech.label}>
-                        {tech.label}
-                      </span>
+                      {a.reviewed && (
+                        <span title="Đã duyệt" className="shrink-0 text-[var(--ok)]">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Actions: only visible on hover or focus-within */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onToggleReviewAlert(a.key)}
+                        aria-label={a.reviewed ? 'Bỏ đánh dấu đã duyệt' : 'Đánh dấu đã duyệt'}
+                        title={a.reviewed ? 'Đã duyệt (Nhấn để hủy)' : 'Đánh dấu đã duyệt'}
+                        className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-3)] hover:text-[var(--ok)] hover:bg-[var(--surface)] transition-colors cursor-pointer focus-visible:ring"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDismissAlert(a.key)}
+                        aria-label={`Xóa cảnh báo ${cleanAttackName(a.attack_type)}`}
+                        title="Xóa cảnh báo này"
+                        className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-3)] hover:text-[var(--danger)] hover:bg-[var(--surface)] transition-colors cursor-pointer focus-visible:ring"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    <span className="font-mono font-bold text-sky-300 tabular-nums ml-2 shrink-0">
-                      {tech.count}
-                    </span>
                   </div>
                 );
               })}
             </div>
-          </div>
+          )}
+        </Card>
 
-          {/* Quick defense layer summary footer */}
-          <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between flex-wrap gap-2 text-[11px] text-slate-400">
-            <div className="flex items-center gap-3 flex-wrap">
-              <span>
-                CRITICAL: <strong className="text-red-400 font-mono tabular-nums">{breakdown.criticalCount}</strong>
-              </span>
-              <span>·</span>
-              <span>
-                HIGH: <strong className="text-amber-400 font-mono tabular-nums">{breakdown.highCount}</strong>
-              </span>
-              <span>·</span>
-              <span>
-                MEDIUM/LOW: <strong className="text-sky-300 font-mono tabular-nums">{breakdown.mediumLowCount}</strong>
-              </span>
-            </div>
+        {/* Phải 2/5: Card "Tài khoản bị hạn chế" (Gộp containment banner + radar, cuộn) */}
+        <Card
+          title={`Tài khoản bị hạn chế (${containedCount})`}
+          className="xl:col-span-2 flex flex-col justify-between"
+          bodyClassName="p-3 sm:p-4"
+          right={
             <button
-              onClick={onOpenOracleBridge}
-              className="inline-flex items-center gap-1 text-sky-300 hover:text-white font-semibold transition-colors cursor-pointer"
+              onClick={() => onNavigateTab('ips')}
+              aria-label="Xem ma trận IPS"
+              className="inline-flex items-center gap-1 text-xs font-medium text-[var(--accent)] hover:underline cursor-pointer focus-visible:ring"
             >
-              <Database className="w-3.5 h-3.5" />
-              <span>Cổng nhận lệnh từ Oracle SQL Developer</span>
+              <span>Ma trận IPS</span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
-          </div>
-        </div>
-
-        {/* Right 5 cols: Live User Risk Posture Radar */}
-        <div className="xl:col-span-5 bg-[#101b2e] border border-sky-500/20 rounded-xl p-4 sm:p-5 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between flex-wrap gap-2 pb-3.5 border-b border-white/5">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
-                  <Users className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="text-[13.5px] font-bold text-slate-100">
-                    Radar Điểm Rủi ro &amp; Cấp độ Phản ứng User
-                  </h2>
-                  <p className="text-[11px] text-slate-400">
-                    Trạng thái định lượng thời gian thực của 4 tài khoản CSDL
-                  </p>
-                </div>
+          }
+        >
+          <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
+            {sortedUsers.length === 0 ? (
+              <div className="py-8 text-center text-xs text-[var(--text-3)]">
+                Không có tài khoản nào trong hệ thống.
               </div>
-              <button
-                onClick={() => onNavigateTab('ips')}
-                className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-sky-400 hover:text-white transition-colors cursor-pointer whitespace-nowrap shrink-0"
-              >
-                <span>Điều khiển IPS</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <div className="mt-4 space-y-3">
-              {users.map((u) => {
-                const color = getRiskColorHex(u.RISK_SCORE);
+            ) : (
+              sortedUsers.map((u) => {
                 const isLocked = u.ACCOUNT_STATUS.toUpperCase().includes('LOCK');
-                const isReadOnly = u.DML_STATUS.toUpperCase() === 'READ-ONLY';
+                const isReadOnly = !isLocked && u.DML_STATUS.toUpperCase() === 'READ-ONLY';
+                const isOpen = !isLocked && !isReadOnly;
+                const isConfirmingLock = confirmLockUser === u.USERNAME;
+                const color = getRiskColorHex(u.RISK_SCORE);
+
                 return (
                   <div
                     key={u.USERNAME}
-                    className="p-3 rounded-lg bg-[#0b1322] border border-white/5 space-y-2"
+                    className={`p-2.5 rounded-lg border transition-colors ${
+                      isLocked
+                        ? 'bg-[var(--danger-soft)]/10 border-[var(--danger)]/30'
+                        : isReadOnly
+                        ? 'bg-[var(--warn-soft)]/10 border-[var(--warn)]/30'
+                        : 'bg-[var(--surface-hover)] border-[var(--line)]'
+                    }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-[13px] text-sky-300">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-mono font-semibold text-xs text-[var(--text-1)]">
                           {maskUsername(u.USERNAME, privacyMode)}
                         </span>
-                        <span className="text-[11px] text-slate-400 font-mono">
-                          · {isLocked ? 'LOCKED (L3)' : isReadOnly ? 'READ-ONLY (L2)' : 'OPEN (FULL DML)'}
+                        <span
+                          className={`text-xs font-mono font-semibold px-1.5 py-0.2 rounded border ${
+                            isLocked
+                              ? 'bg-[var(--danger-soft)] text-[var(--danger)] border-[var(--danger)]/30'
+                              : isReadOnly
+                              ? 'bg-[var(--warn-soft)] text-[var(--warn)] border-[var(--warn)]/30'
+                              : 'bg-[var(--ok-soft)] text-[var(--ok)] border-[var(--ok)]/30'
+                          }`}
+                        >
+                          {isLocked ? 'LOCKED' : isReadOnly ? 'READ-ONLY' : 'OPEN'}
                         </span>
                       </div>
-                      <span
-                        className="font-mono font-bold text-[12px] tabular-nums"
-                        style={{ color }}
-                      >
-                        {u.RISK_SCORE} / 100
+                      <span className="font-mono text-xs font-semibold tabular-nums shrink-0" style={{ color }}>
+                        {u.RISK_SCORE}/100
                       </span>
                     </div>
 
-                    <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-300"
-                        style={{ width: `${u.RISK_SCORE}%`, backgroundColor: color }}
-                      />
-                    </div>
+                    {/* Action buttons (strict non-contradictory logic) */}
+                    {onUserAction && (
+                      <div className="flex items-center justify-end gap-1.5 mt-2">
+                        {/* 1. LOCKED: Only Unlock */}
+                        {isLocked && (
+                          <button
+                            type="button"
+                            onClick={() => onUserAction(u.USERNAME, 'unlock')}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[var(--ok-soft)] border border-[var(--ok)]/30 text-[var(--ok)] hover:bg-[var(--ok-soft)]/80 text-xs font-medium cursor-pointer transition-colors focus-visible:ring"
+                            title={`Mở khóa tài khoản ${u.USERNAME}`}
+                          >
+                            <Unlock className="w-3 h-3" />
+                            <span>Mở khóa</span>
+                          </button>
+                        )}
 
-                    <div className="flex items-center justify-between text-[10.5px] text-slate-400 font-mono">
-                      <span>{u.RESPONSE_LABEL}</span>
-                      <span>Quyền: {u.PRIVILEGES}</span>
-                    </div>
+                        {/* 2. READ-ONLY: Restore DML + Lock L3 */}
+                        {isReadOnly && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => onUserAction(u.USERNAME, 'grant_dml')}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[var(--surface)] border border-[var(--line)] text-[var(--text-1)] hover:border-[var(--accent)] text-xs font-medium cursor-pointer transition-colors focus-visible:ring"
+                              title={`Khôi phục quyền DML cho ${u.USERNAME}`}
+                            >
+                              <ShieldCheck className="w-3 h-3 text-[var(--accent)]" />
+                              <span>Khôi phục DML</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleLockUser(u.USERNAME)}
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium cursor-pointer transition-colors focus-visible:ring ${
+                                isConfirmingLock
+                                  ? 'bg-[var(--danger)] text-white border border-[var(--danger)] animate-pulse'
+                                  : 'bg-[var(--danger-soft)] border border-[var(--danger)]/30 text-[var(--danger)] hover:bg-[var(--danger)] hover:text-white'
+                              }`}
+                              title={`Khóa tài khoản ${u.USERNAME}`}
+                            >
+                              <Lock className="w-3 h-3" />
+                              <span>{isConfirmingLock ? 'Bấm lại để xác nhận' : 'Khóa'}</span>
+                            </button>
+                          </>
+                        )}
+
+                        {/* 3. OPEN: Revoke DML (Read-Only) + Lock L3 */}
+                        {isOpen && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => onUserAction(u.USERNAME, 'revoke_dml')}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[var(--surface)] border border-[var(--line)] text-[var(--text-2)] hover:text-[var(--warn)] text-xs font-medium cursor-pointer transition-colors focus-visible:ring"
+                              title={`Hạ quyền tạm thời về Read-Only cho ${u.USERNAME}`}
+                            >
+                              <ShieldAlert className="w-3 h-3 text-[var(--warn)]" />
+                              <span>Hạ quyền</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleLockUser(u.USERNAME)}
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium cursor-pointer transition-colors focus-visible:ring ${
+                                isConfirmingLock
+                                  ? 'bg-[var(--danger)] text-white border border-[var(--danger)] animate-pulse'
+                                  : 'bg-[var(--danger-soft)] border border-[var(--danger)]/30 text-[var(--danger)] hover:bg-[var(--danger)] hover:text-white'
+                              }`}
+                              title={`Khóa tài khoản ${u.USERNAME}`}
+                            >
+                              <Lock className="w-3 h-3" />
+                              <span>{isConfirmingLock ? 'Bấm lại để xác nhận' : 'Khóa'}</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
-              })}
-            </div>
+              })
+            )}
           </div>
-
-          <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-400">
-            <span>
-              Bẫy FGA đã kích hoạt: <strong className="text-purple-300 font-mono tabular-nums">{fgaEvents.length}</strong>
-            </span>
-            <span>
-              Trigger chặn tức thời: <strong className="text-amber-300 font-mono tabular-nums">{triggers.length}</strong>
-            </span>
-          </div>
-        </div>
+        </Card>
       </section>
 
-      {/* 4. Compact Live Security Stream (Top 4 Latest Alerts + Quick Review/Reset) */}
-      <section className="bg-[#101b2e] border border-sky-500/20 rounded-xl p-4 sm:p-5">
-        <div className="flex items-center justify-between flex-wrap gap-2 pb-3.5 border-b border-white/5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 shrink-0">
-              <Activity className="w-4 h-4" />
+      {/* =========================================================================
+          HANG 3:
+          Trái: Heatmap + Thanh phân bổ kỹ thuật tấn công xếp chồng (DBMS vs SDB)
+          Phải: Card "Thao tác nhanh" (Xuất PDF, Duyệt tất cả, Dọn hàng đợi, Kết nối Oracle)
+          ========================================================================= */}
+      <section className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+        {/* Trai 3/5: Heatmap & Phân bổ kỹ thuật */}
+        <div className="xl:col-span-3 space-y-3">
+          {/* Stacked DBMS vs SDB vector ratio bar */}
+          <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-3 sm:px-4">
+            <div className="flex items-center justify-between text-xs font-medium mb-1.5">
+              <span className="flex items-center gap-1.5 text-[var(--danger)] font-mono">
+                <span className="w-2 h-2 rounded-full bg-[var(--danger)]" />
+                <span>Nhóm I (DBMS): {breakdown.dbmsCount} ({breakdown.dbmsPercent}%)</span>
+              </span>
+              <span className="flex items-center gap-1.5 text-[var(--warn)] font-mono">
+                <span className="w-2 h-2 rounded-full bg-[var(--warn)]" />
+                <span>Nhóm II (SDB): {breakdown.sdbCount} ({breakdown.sdbPercent}%)</span>
+              </span>
             </div>
-            <div>
-              <h2 className="text-[13.5px] font-bold text-slate-100">
-                Dòng Thời gian Sự kiện An ninh Mới nhất từ Oracle (4 sự kiện gần nhất)
-              </h2>
-              <p className="text-[11px] text-slate-400">
-                Nhấn vào sự kiện để kiểm tra nhanh, đánh dấu đã duyệt hoặc Reset trực tiếp sau khi xử lý
-              </p>
+            <div
+              role="progressbar"
+              aria-label="Tỷ lệ phân bổ kỹ thuật tấn công DBMS và SDB"
+              aria-valuenow={breakdown.dbmsPercent}
+              className="w-full h-1.5 bg-[var(--surface-hover)] rounded-full overflow-hidden flex"
+            >
+              <div
+                className="h-full bg-[var(--danger)] transition-all duration-300"
+                style={{ width: `${breakdown.dbmsPercent}%` }}
+              />
+              <div
+                className="h-full bg-[var(--warn)] transition-all duration-300"
+                style={{ width: `${breakdown.sdbPercent}%` }}
+              />
             </div>
           </div>
 
-          {/* Direct Navigation Shortcuts to Specialized Tabs */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => onNavigateTab('alerts')}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#131e33] border border-sky-500/20 text-slate-200 hover:text-white hover:border-sky-400 text-[11.5px] font-semibold transition-colors cursor-pointer"
-            >
-              <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-              <span>Tất cả Cảnh báo ({alerts.length})</span>
-            </button>
-            <button
-              onClick={() => onNavigateTab('fga')}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#131e33] border border-sky-500/20 text-slate-200 hover:text-white hover:border-sky-400 text-[11.5px] font-semibold transition-colors cursor-pointer"
-            >
-              <Target className="w-3.5 h-3.5 text-purple-400" />
-              <span>Bẫy FGA ({fgaEvents.length})</span>
-            </button>
-            <button
-              onClick={() => onNavigateTab('triggers')}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#131e33] border border-sky-500/20 text-slate-200 hover:text-white hover:border-sky-400 text-[11.5px] font-semibold transition-colors cursor-pointer"
-            >
-              <Zap className="w-3.5 h-3.5 text-amber-400" />
-              <span>Trigger ({triggers.length})</span>
-            </button>
-          </div>
+          {/* Heatmap */}
+          <AttackHeatmap
+            alerts={alerts}
+            users={users}
+            privacyMode={privacyMode}
+            onOpenAlertModal={onOpenAlertModal}
+            onOpenOracleBridge={onOpenOracleBridge}
+          />
         </div>
 
-        {alerts.length === 0 ? (
-          <div className="py-8 text-center flex flex-col items-center gap-2.5">
-            <CheckCircle2 className="w-8 h-8 text-emerald-400" />
-            <div className="text-[12.5px] font-semibold text-slate-200">
-              Hệ thống đang ở trạng thái An toàn (0 cảnh báo). Hãy thực thi câu lệnh trên Oracle SQL Developer để giám sát thời gian thực.
-            </div>
+        {/* Phải 2/5: Card "Thao tác nhanh" (Post-Audit Bar converted here) */}
+        <Card
+          title="Thao tác nhanh"
+          className="xl:col-span-2 flex flex-col justify-between"
+          bodyClassName="p-3 sm:p-4 space-y-2.5"
+          right={
+            <span
+              title="Thực hiện duyệt, reset hoặc xuất báo cáo sau khi hoàn tất kiểm tra kịch bản"
+              className="text-[var(--text-3)] cursor-help"
+            >
+              <Info className="w-3.5 h-3.5" />
+            </span>
+          }
+        >
+          <div className="space-y-2">
+            {/* 1. Duyệt tất cả (2-step confirm) */}
+            <button
+              type="button"
+              onClick={handleMarkAll}
+              disabled={pendingReviewCount === 0}
+              className={`w-full flex items-center justify-between p-2.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring ${
+                confirmMarkAll
+                  ? 'bg-[var(--ok)] text-white border-[var(--ok)] animate-pulse'
+                  : 'bg-[var(--surface-hover)] border-[var(--line)] text-[var(--text-1)] hover:border-[var(--ok)]'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <CheckCheck className="w-4 h-4 text-[var(--ok)]" />
+                <span>{confirmMarkAll ? 'Bấm lại để xác nhận' : 'Duyệt tất cả'}</span>
+              </span>
+              <span className="font-mono text-xs text-[var(--text-3)]">
+                {pendingReviewCount} chờ
+              </span>
+            </button>
+
+            {/* 2. Reset mục đã duyệt */}
+            <button
+              type="button"
+              onClick={onResetReviewedAll}
+              disabled={totalReviewed === 0}
+              className="w-full flex items-center justify-between p-2.5 rounded-lg border border-[var(--line)] bg-[var(--surface-hover)] hover:border-[var(--warn)] text-xs font-medium text-[var(--text-1)] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring"
+            >
+              <span className="flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-[var(--warn)]" />
+                <span>Reset mục đã duyệt</span>
+              </span>
+              <span className="font-mono text-xs text-[var(--text-3)]">
+                {totalReviewed} mục
+              </span>
+            </button>
+
+            {/* 3. Dọn hàng đợi / Reset toàn bộ (2-step confirm) */}
+            <button
+              type="button"
+              onClick={handleResetAll}
+              disabled={totalEventsAndAlerts === 0}
+              className={`w-full flex items-center justify-between p-2.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring ${
+                confirmResetAll
+                  ? 'bg-[var(--danger)] text-white border-[var(--danger)] animate-pulse'
+                  : 'bg-[var(--surface-hover)] border-[var(--line)] text-[var(--text-1)] hover:border-[var(--danger)]'
+              }`}
+            >
+              <span className="flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-[var(--danger)]" />
+                <span>{confirmResetAll ? 'Bấm lại để xác nhận' : 'Dọn hàng đợi'}</span>
+              </span>
+              <span className="font-mono text-xs text-[var(--text-3)]">
+                {totalEventsAndAlerts} sự kiện
+              </span>
+            </button>
+
+            {/* 4. Xuất PDF */}
+            {onOpenPdfExport && (
+              <button
+                type="button"
+                onClick={onOpenPdfExport}
+                className="w-full flex items-center justify-between p-2.5 rounded-lg border border-[var(--line)] bg-[var(--surface-hover)] hover:border-[var(--accent)] text-xs font-medium text-[var(--text-1)] transition-colors cursor-pointer focus-visible:ring"
+              >
+                <span className="flex items-center gap-2">
+                  <FileDown className="w-4 h-4 text-[var(--accent)]" />
+                  <span>Xuất báo cáo PDF</span>
+                </span>
+                <span className="text-xs text-[var(--text-3)]">SOC Report</span>
+              </button>
+            )}
+
+            {/* 5. Kết nối Oracle Bridge */}
+            <button
+              type="button"
+              onClick={onOpenOracleBridge}
+              className="w-full flex items-center justify-between p-2.5 rounded-lg border border-[var(--line)] bg-[var(--surface-hover)] hover:border-[var(--accent)] text-xs font-medium text-[var(--text-1)] transition-colors cursor-pointer focus-visible:ring"
+            >
+              <span className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-[var(--ok)]" />
+                <span>Kết nối Oracle Bridge</span>
+              </span>
+              <span className="font-mono text-xs text-[var(--text-3)]">FREEPDB1</span>
+            </button>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
-            {alerts.slice(0, 4).map((a) => {
-              const color = getRiskColorHex(a.risk_score);
-              return (
-                <div
-                  key={a.key}
-                  onClick={() => onOpenAlertModal(a)}
-                  className={`p-3.5 rounded-lg bg-[#0b1322] border transition-all cursor-pointer flex items-start justify-between gap-3 group ${
-                    a.reviewed
-                      ? 'border-emerald-500/30 bg-emerald-950/10 opacity-80'
-                      : 'border-white/5 hover:border-sky-500/35'
-                  }`}
-                >
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400 flex-wrap">
-                      <span className="font-bold text-sky-300">{a.user}</span>
-                      <span>·</span>
-                      <span className="tabular-nums">{a.time}</span>
-                      <span>·</span>
-                      <span style={{ color }} className="font-bold tabular-nums">
-                        Risk {a.risk_score}/100
-                      </span>
-                      {a.reviewed && (
-                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9.5px] font-bold">
-                          ĐÃ DUYỆT
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[12.5px] font-bold text-slate-100 truncate group-hover:text-sky-300 transition-colors">
-                      {a.attack_type}
-                    </div>
-                    <div className="text-[11px] font-mono text-slate-400 truncate">
-                      {a.details}
-                    </div>
-                  </div>
-                  <div
-                    className="flex items-center gap-1 shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      onClick={() => onToggleReviewAlert(a.key)}
-                      aria-label={a.reviewed ? 'Bỏ đánh dấu đã duyệt' : 'Đánh dấu đã kiểm duyệt'}
-                      title={a.reviewed ? 'Đã kiểm duyệt (Nhấn để hoàn tác)' : 'Đánh dấu đã kiểm duyệt'}
-                      className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                        a.reviewed
-                          ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                          : 'bg-[#131e33] border-white/10 text-slate-400 hover:text-emerald-300'
-                      }`}
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => onDismissAlert(a.key)}
-                      aria-label={`Reset cảnh báo ${a.attack_type}`}
-                      title="Đã duyệt & Reset cảnh báo này"
-                      className="p-1.5 rounded-lg bg-[#131e33] border border-amber-500/25 text-amber-300 hover:bg-amber-500/20 transition-colors cursor-pointer"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => onOpenAlertModal(a)}
-                      aria-label={`Xem chi tiết cảnh báo ${a.attack_type}`}
-                      title="Xem chi tiết"
-                      className="p-1.5 rounded-lg bg-[#131e33] border border-sky-500/20 text-slate-300 group-hover:text-white cursor-pointer"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        </Card>
       </section>
     </div>
   );

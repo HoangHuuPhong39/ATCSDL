@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Database,
@@ -78,6 +78,15 @@ export const OracleBridgeModal: React.FC<OracleBridgeModalProps> = ({
   const [outputs, setOutputs] = useState<string[]>([]);
   const [copiedCmd, setCopiedCmd] = useState<boolean>(false);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const appOrigin = typeof window !== 'undefined' ? window.location.origin : '';
@@ -103,83 +112,86 @@ export const OracleBridgeModal: React.FC<OracleBridgeModalProps> = ({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="oracle-bridge-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-[#0f192b] border border-sky-500/35 rounded-xl w-full max-w-2xl shadow-2xl shadow-black/80 overflow-hidden flex flex-col max-h-[88vh]">
+      <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl w-full max-w-2xl shadow-2xl shadow-black/80 overflow-hidden flex flex-col max-h-[88vh]">
         {/* Header */}
-        <div className="px-5 py-3.5 border-b border-white/10 bg-[#0c1424] flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5 text-[14px] font-bold text-slate-100">
-            <Database className="w-4 h-4 text-sky-400 shrink-0" />
-            <span>Cổng Kết nối &amp; Đồng bộ Cảnh báo Oracle SQL Developer (FREEPDB1)</span>
+        <div className="px-5 py-3.5 border-b border-[var(--line)] bg-[var(--surface)] flex items-center justify-between gap-2">
+          <div id="oracle-bridge-modal-title" className="flex items-center gap-2.5 text-sm font-semibold text-[var(--text-1)]">
+            <Database className="w-4 h-4 text-[var(--accent)] shrink-0" />
+            <span>Cổng kết nối Oracle SQL Developer (FREEPDB1)</span>
           </div>
           <button
             onClick={onClose}
             aria-label="Đóng cổng kết nối Oracle"
-            className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-white/10 transition-colors cursor-pointer"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-[var(--text-3)] hover:text-[var(--text-1)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer focus-visible:ring"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Mode Switcher */}
-        <div className="px-5 pt-3.5 bg-[#0c1424]/60 border-b border-white/5 flex items-center justify-between flex-wrap gap-2 pb-3">
-          <div className="flex items-center bg-[#080d17] border border-sky-500/20 rounded-lg p-1 gap-1">
+        <div className="px-5 pt-3.5 bg-[var(--surface)] border-b border-[var(--line)] flex items-center justify-between flex-wrap gap-2 pb-3">
+          <div className="flex items-center bg-[var(--surface-subtle)] border border-[var(--line)] rounded-lg p-1 gap-1">
             <button
               onClick={() => setActiveMode('worksheet')}
-              className={`px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:ring ${
                 activeMode === 'worksheet'
-                  ? 'bg-sky-600 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[var(--accent)] text-white font-semibold'
+                  : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
               }`}
             >
               <Terminal className="w-3.5 h-3.5" />
-              <span>Đồng bộ Lệnh từ SQL Worksheet</span>
+              <span>Đồng bộ từ SQL Worksheet</span>
             </button>
             <button
               onClick={() => setActiveMode('agent')}
-              className={`px-3 py-1.5 rounded-md text-[12px] font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:ring ${
                 activeMode === 'agent'
-                  ? 'bg-sky-600 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-[var(--accent)] text-white font-semibold'
+                  : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
               }`}
             >
               <Radio className="w-3.5 h-3.5" />
-              <span>Cầu nối Tự động (Python Agent / Webhook)</span>
+              <span>Cầu nối tự động (Python Agent)</span>
             </button>
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] font-mono">
+          <div className="flex items-center gap-2 text-xs font-mono">
             <span
               className={`w-2 h-2 rounded-full ${
-                isBridgeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-sky-400'
+                isBridgeConnected ? 'bg-[var(--ok)] animate-pulse' : 'bg-[var(--accent)]'
               }`}
             />
-            <span className="text-slate-300">
+            <span className="text-[var(--text-3)]">
               {isBridgeConnected
-                ? `Đã đồng bộ lúc ${lastSyncTime?.substring(11, 19) || 'vừa xong'}`
-                : 'Sẵn sàng nhận cảnh báo thời gian thực'}
+                ? `Đồng bộ lúc ${lastSyncTime?.substring(11, 19) || 'vừa xong'}`
+                : 'Sẵn sàng nhận sự kiện'}
             </span>
           </div>
         </div>
 
         {/* Body */}
-        <div className="p-5 overflow-y-auto space-y-4 text-[12.5px]">
+        <div className="p-5 overflow-y-auto space-y-4 text-xs">
           {activeMode === 'worksheet' ? (
             <>
-              <div className="bg-[#0b1322] border border-sky-500/20 rounded-lg p-3 text-[12px] text-slate-300 leading-relaxed flex items-start gap-2.5">
-                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="bg-[var(--surface-subtle)] border border-[var(--line)] rounded-lg p-3 text-xs text-[var(--text-2)] leading-relaxed flex items-start gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-[var(--ok)] shrink-0 mt-0.5" />
                 <div>
-                  Khi báo cáo thuyết trình cùng <strong>Oracle SQL Developer</strong>, bạn có thể dán trực tiếp câu lệnh vừa chạy trên Worksheet (hoặc chọn nhanh lệnh từ file <code className="text-sky-300 font-mono">User_U1.sql</code> bên dưới) để đẩy tức thời sự kiện vào bộ phân tích <strong>UNIFIED_AUDIT_TRAIL / Trigger / FGA</strong> của Dashboard. Mọi mật khẩu đều được ẩn tự động.
+                  Dán câu lệnh vừa thực thi trên <strong>Oracle SQL Developer</strong> (hoặc chọn lệnh mẫu bên dưới) để đồng bộ tức thời sự kiện vào hệ thống IDS. Thông tin đăng nhập được bảo mật tự động.
                 </div>
               </div>
 
-              {/* Quick preset selector matching User_U1.sql in screenshot */}
+              {/* Quick preset selector */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold uppercase text-slate-400 block">
-                  Nạp nhanh câu lệnh từ Worksheet (User_U1.sql / DEMO_COMMANDS.sql):
+                <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)] block">
+                  Câu lệnh mẫu nhanh (User_U1.sql / DEMO_COMMANDS.sql):
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                   {WORKSHEET_PRESETS.map((preset, idx) => (
@@ -189,10 +201,10 @@ export const OracleBridgeModal: React.FC<OracleBridgeModalProps> = ({
                         setSelectedUser(preset.user);
                         setSqlInput(preset.sql);
                       }}
-                      className="text-left px-3 py-2 rounded-lg bg-[#0b1322] hover:bg-[#131e33] border border-white/5 hover:border-sky-500/35 text-[11.5px] text-slate-200 transition-all cursor-pointer truncate"
+                      className="text-left px-3 py-2 rounded-lg bg-[var(--surface-subtle)] hover:bg-[var(--surface-hover)] border border-[var(--line)] text-xs text-[var(--text-2)] hover:text-[var(--text-1)] transition-colors cursor-pointer truncate focus-visible:ring"
                       title={preset.label}
                     >
-                      <span className="font-mono font-bold text-sky-400 mr-1.5">
+                      <span className="font-mono font-semibold text-[var(--accent)] mr-1.5">
                         [{maskUsername(preset.user, privacyMode)}]
                       </span>
                       <span>{preset.label.replace(/^Lệnh \d+.*?: /, '')}</span>
@@ -204,13 +216,13 @@ export const OracleBridgeModal: React.FC<OracleBridgeModalProps> = ({
               {/* Session Connection & SQL Input */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="text-[11px] font-bold uppercase text-slate-400 block mb-1">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)] block mb-1">
                     Kết nối (Connection)
                   </label>
                   <select
                     value={selectedUser}
                     onChange={(e) => setSelectedUser(e.target.value)}
-                    className="w-full bg-[#0b1322] border border-sky-500/25 rounded-lg text-slate-100 px-3 py-2 text-[12px] font-mono outline-none focus:border-sky-400"
+                    className="w-full bg-[var(--surface-hover)] border border-[var(--line)] rounded-lg text-[var(--text-1)] px-3 py-2 text-xs font-mono outline-none focus:border-[var(--accent)] cursor-pointer"
                   >
                     {users.map((u) => (
                       <option key={u.USERNAME} value={u.USERNAME}>
@@ -220,18 +232,18 @@ export const OracleBridgeModal: React.FC<OracleBridgeModalProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold uppercase text-slate-400 block mb-1">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)] block mb-1">
                     Oracle Service (DSN)
                   </label>
-                  <div className="w-full bg-[#0b1322] border border-white/10 rounded-lg text-slate-300 px-3 py-2 text-[12px] font-mono">
+                  <div className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-lg text-[var(--text-2)] px-3 py-2 text-xs font-mono">
                     {privacyMode ? '••••••••:1521/FREEPDB1' : 'localhost:1521/FREEPDB1'}
                   </div>
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold uppercase text-slate-400 block mb-1">
-                    Xác thực Phiên
+                  <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)] block mb-1">
+                    Xác thực phiên
                   </label>
-                  <div className="w-full bg-[#0b1322] border border-emerald-500/25 rounded-lg text-emerald-300 px-3 py-2 text-[12px] font-mono flex items-center gap-1.5">
+                  <div className="w-full bg-[var(--surface-subtle)] border border-[var(--line)] rounded-lg text-[var(--ok)] px-3 py-2 text-xs font-mono flex items-center gap-1.5">
                     <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                     <span>Mật khẩu đã mã hóa</span>
                   </div>
@@ -240,11 +252,11 @@ export const OracleBridgeModal: React.FC<OracleBridgeModalProps> = ({
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-[11px] font-bold uppercase text-slate-400">
-                    Câu lệnh SQL thực thi từ Oracle SQL Developer:
+                  <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-3)]">
+                    Câu lệnh SQL thực thi:
                   </label>
-                  <span className="text-[10.5px] text-slate-400 font-mono">
-                    Hỗ trợ chạy 1 lệnh hoặc nhiều lệnh cách nhau bởi dấu ;
+                  <span className="text-xs text-[var(--text-3)] font-mono">
+                    Chạy 1 hoặc nhiều lệnh ngăn cách bằng ;
                   </span>
                 </div>
                 <textarea
@@ -252,17 +264,17 @@ export const OracleBridgeModal: React.FC<OracleBridgeModalProps> = ({
                   value={sqlInput}
                   onChange={(e) => setSqlInput(e.target.value)}
                   placeholder="Dán câu lệnh SQL vừa chạy trên Oracle SQL Developer..."
-                  className="w-full bg-[#070d18] border border-sky-500/30 rounded-lg p-3 font-mono text-[12px] text-sky-300 outline-none focus:border-sky-400 leading-relaxed"
+                  className="w-full bg-[var(--surface-hover)] border border-[var(--line)] rounded-lg p-3 font-mono text-xs text-[var(--text-1)] outline-none focus:border-[var(--accent)] leading-relaxed"
                 />
               </div>
 
               {outputs.length > 0 && (
-                <div className="bg-[#070d18] border border-emerald-500/30 rounded-lg p-3 space-y-1.5">
-                  <div className="text-[10.5px] font-bold uppercase text-emerald-400 font-mono">
-                    Kết quả Phản hồi từ Động cơ Giám sát Oracle DB-IDS:
+                <div className="bg-[var(--surface-subtle)] border border-[var(--line)] rounded-lg p-3 space-y-1.5">
+                  <div className="text-xs font-semibold uppercase text-[var(--ok)] font-mono">
+                    Kết quả phản hồi từ Oracle DB-IDS:
                   </div>
                   {outputs.map((line, idx) => (
-                    <div key={idx} className="font-mono text-[11.5px] text-slate-200">
+                    <div key={idx} className="font-mono text-xs text-[var(--text-2)]">
                       • {line}
                     </div>
                   ))}
@@ -271,39 +283,39 @@ export const OracleBridgeModal: React.FC<OracleBridgeModalProps> = ({
             </>
           ) : (
             <div className="space-y-4">
-              <div className="bg-[#0b1322] border border-sky-500/20 rounded-lg p-3.5 space-y-2">
-                <div className="font-bold text-slate-100 text-[13px] flex items-center gap-2">
-                  <Download className="w-4 h-4 text-sky-400" />
-                  <span>Cách 1: Chạy Agent Đồng bộ Tự động từ máy cài Oracle (`oracle_bridge.py`)</span>
+              <div className="bg-[var(--surface-subtle)] border border-[var(--line)] rounded-lg p-3.5 space-y-2">
+                <div className="font-semibold text-[var(--text-1)] text-xs flex items-center gap-2">
+                  <Download className="w-4 h-4 text-[var(--accent)]" />
+                  <span>Cách 1: Chạy Agent đồng bộ tự động (`oracle_bridge.py`)</span>
                 </div>
-                <p className="text-[12px] text-slate-300 leading-relaxed">
-                  Tải file <code className="text-sky-300 font-mono">oracle_bridge.py</code> đặt cùng thư mục với <code className="text-sky-300 font-mono">ids_dashboard.py</code> trên máy tính của bạn. Khi bạn bấm nút Run (Ctrl+Enter) trong <strong>Oracle SQL Developer</strong>, mọi cảnh báo từ <code className="text-sky-300 font-mono">UNIFIED_AUDIT_TRAIL</code> và <code className="text-sky-300 font-mono">SYS.IDS_TRIGGER_ALERTS</code> sẽ tự động đẩy thẳng lên Dashboard này sau 2 giây mà <strong>không lộ bất kỳ mật khẩu hay thông tin nhạy cảm nào</strong>.
+                <p className="text-xs text-[var(--text-2)] leading-relaxed">
+                  Tải file <code className="text-[var(--accent)] font-mono">oracle_bridge.py</code> đặt cùng thư mục trên máy chạy Oracle. Khi thực thi trong <strong>Oracle SQL Developer</strong>, các sự kiện từ Audit Trail và Triggers sẽ tự động gửi thẳng về Dashboard an toàn.
                 </p>
                 <div className="pt-1">
                   <a
                     href="/api/oracle-bridge.py"
                     download="oracle_bridge.py"
-                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold text-[12px] transition-all cursor-pointer"
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[var(--accent)] hover:opacity-90 text-white font-semibold text-xs transition-all cursor-pointer focus-visible:ring shadow-xs"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    <span>Tải xuống oracle_bridge.py (Đã cấu hình sẵn URL Dashboard)</span>
+                    <span>Tải xuống oracle_bridge.py</span>
                   </a>
                 </div>
               </div>
 
-              <div className="bg-[#0b1322] border border-white/10 rounded-lg p-3.5 space-y-2">
+              <div className="bg-[var(--surface-subtle)] border border-[var(--line)] rounded-lg p-3.5 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-100 text-[13px]">
-                    Cách 2: Gửi sự kiện qua REST Webhook từ Terminal / Script kiểm thử
+                  <span className="font-semibold text-[var(--text-1)] text-xs">
+                    Cách 2: Gửi sự kiện qua REST Webhook từ Terminal
                   </span>
                   <button
                     onClick={handleCopyCurl}
-                    className="inline-flex items-center gap-1 text-[11px] text-sky-400 hover:text-white cursor-pointer"
+                    className="inline-flex items-center gap-1 text-xs text-[var(--accent)] hover:underline cursor-pointer"
                   >
                     {copiedCmd ? (
                       <>
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        <span className="text-emerald-400">Đã sao chép</span>
+                        <Check className="w-3.5 h-3.5 text-[var(--ok)]" />
+                        <span className="text-[var(--ok)]">Đã sao chép</span>
                       </>
                     ) : (
                       <>
@@ -313,7 +325,7 @@ export const OracleBridgeModal: React.FC<OracleBridgeModalProps> = ({
                     )}
                   </button>
                 </div>
-                <pre className="bg-[#070d18] p-3 rounded-lg border border-white/5 font-mono text-[11px] text-sky-300 overflow-x-auto">
+                <pre className="bg-[var(--bg)] p-3 rounded-lg border border-[var(--line)] font-mono text-xs text-[var(--text-2)] overflow-x-auto">
                   {curlExample}
                 </pre>
               </div>
@@ -322,24 +334,24 @@ export const OracleBridgeModal: React.FC<OracleBridgeModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-white/10 bg-[#0c1424] flex items-center justify-between gap-2">
-          <div className="text-[11px] text-slate-400 font-mono">
-            Tự động làm mới: 3 giây/lần · Bảo mật thông tin đăng nhập: Đang bật
+        <div className="px-5 py-3 border-t border-[var(--line)] bg-[var(--surface)] flex items-center justify-between gap-2">
+          <div className="text-xs text-[var(--text-3)] font-mono">
+            Tự động làm mới: 3s · Bảo mật thông tin: Bật
           </div>
           <div className="flex items-center gap-2">
             {activeMode === 'worksheet' && (
               <button
                 onClick={handleRunSqlSync}
                 disabled={isSending}
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 border border-emerald-400 text-white text-[12px] font-bold transition-all cursor-pointer disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[var(--accent)] hover:opacity-90 text-white text-xs font-semibold transition-all shadow-xs cursor-pointer focus-visible:ring disabled:opacity-50"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{isSending ? 'Đang gửi về Dashboard...' : 'Gửi Lệnh & Phát Cảnh báo về Dashboard'}</span>
+                <span>{isSending ? 'Đang gửi...' : 'Gửi lệnh về Dashboard'}</span>
               </button>
             )}
             <button
               onClick={onClose}
-              className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[12px] font-semibold transition-all cursor-pointer"
+              className="px-4 py-2 rounded-lg bg-[var(--surface-hover)] hover:bg-[var(--surface-subtle)] border border-[var(--line)] text-[var(--text-2)] hover:text-[var(--text-1)] text-xs font-medium transition-colors cursor-pointer focus-visible:ring"
             >
               Đóng
             </button>

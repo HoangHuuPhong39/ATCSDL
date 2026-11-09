@@ -39,10 +39,14 @@ APP_STATE = {
     "auto_response": True,
     # Mốc thời gian xóa toàn bộ cảnh báo IDS (chuỗi 'YYYY-MM-DD HH24:MI:SS')
     "alerts_cleared_at": "",
+    "fga_cleared_at": "",
+    "audit_cleared_at": "",
     # Mốc thời gian xác nhận/mở khóa/khôi phục quyền riêng cho từng User để không bị khóa/hạ quyền lại bởi cảnh báo cũ
     "user_cleared_at": {},
     # Tập hợp các cảnh báo đơn lẻ đã bấm xóa
     "dismissed_keys": set(),
+    "dismissed_fga_keys": set(),
+    "dismissed_audit_keys": set(),
     # Lưu vết số lần thực thi V$SQL tại thời điểm xóa lịch sử (hỗ trợ bắt lệnh khi chạy nhầm trên SYS_FREEPDB1)
     "vsql_baseline": {},
     # Lịch sử cảnh báo bền vững (không bị mất khi tự động làm mới 5s, chỉ xóa khi bấm Reset)
@@ -57,8 +61,12 @@ def load_persisted_state():
                 raw = json.load(f)
             APP_STATE["auto_response"] = bool(raw.get("auto_response", True))
             APP_STATE["alerts_cleared_at"] = str(raw.get("alerts_cleared_at", ""))
+            APP_STATE["fga_cleared_at"] = str(raw.get("fga_cleared_at", ""))
+            APP_STATE["audit_cleared_at"] = str(raw.get("audit_cleared_at", ""))
             APP_STATE["user_cleared_at"] = dict(raw.get("user_cleared_at", {}))
             APP_STATE["dismissed_keys"] = set(raw.get("dismissed_keys", []))
+            APP_STATE["dismissed_fga_keys"] = set(raw.get("dismissed_fga_keys", []))
+            APP_STATE["dismissed_audit_keys"] = set(raw.get("dismissed_audit_keys", []))
             APP_STATE["vsql_baseline"] = dict(raw.get("vsql_baseline", {}))
             APP_STATE["alert_history"] = dict(raw.get("alert_history", {}))
     except Exception:
@@ -67,11 +75,18 @@ def load_persisted_state():
 
 def save_persisted_state():
     try:
+        dismissed_list = list(APP_STATE["dismissed_keys"])[-500:]
+        dismissed_fga_list = list(APP_STATE.get("dismissed_fga_keys", set()))[-500:]
+        dismissed_audit_list = list(APP_STATE.get("dismissed_audit_keys", set()))[-500:]
         payload = {
             "auto_response": APP_STATE["auto_response"],
             "alerts_cleared_at": APP_STATE["alerts_cleared_at"],
+            "fga_cleared_at": APP_STATE.get("fga_cleared_at", ""),
+            "audit_cleared_at": APP_STATE.get("audit_cleared_at", ""),
             "user_cleared_at": APP_STATE["user_cleared_at"],
-            "dismissed_keys": list(APP_STATE["dismissed_keys"]),
+            "dismissed_keys": dismissed_list,
+            "dismissed_fga_keys": dismissed_fga_list,
+            "dismissed_audit_keys": dismissed_audit_list,
             "vsql_baseline": APP_STATE.get("vsql_baseline", {}),
             "alert_history": APP_STATE.get("alert_history", {}),
         }
@@ -168,7 +183,7 @@ def ensure_utf8_database_objects():
             except Exception:
                 pass
 
-        # 2. Biên dịch lại Trigger chuẩn UTF-8 (chặn cả khi chạy nhầm trên kết nối SYS_FREEPDB1)
+        # 2. Biên dịch lại Trigger chuẩn UTF-8 (chỉ áp dụng bảo vệ với các User nghiệp vụ, cho phép DBA SYS/SYSTEM khởi tạo dữ liệu)
         trigger_sql = """
         CREATE OR REPLACE TRIGGER SYS.TRG_PROTECT_NV
         BEFORE UPDATE OR DELETE ON SYSTEM.NV
@@ -178,6 +193,9 @@ def ensure_utf8_database_objects():
             v_user VARCHAR2(50);
         BEGIN
             v_user := SYS_CONTEXT('USERENV', 'SESSION_USER');
+            IF v_user IN ('SYS', 'SYSTEM') THEN
+                RETURN;
+            END IF;
 
             IF DELETING THEN
                 INSERT INTO SYS.IDS_TRIGGER_ALERTS (db_user, attack_type, details)
@@ -221,13 +239,52 @@ def ensure_utf8_database_objects():
         except Exception:
             pass
 
-        # 4. Đảm bảo 2 chính sách DBMS_FGA trên bảng NV được bật
+        # 4. Đảm bảo 2 chính sách DBMS_FGA trên bảng NV được bật (kèm Handler chặn tức thời ORA-20003 cho Honeytoken)
         try:
             cur.execute(
-                "SELECT policy_name FROM dba_audit_policies "
+                """
+                CREATE OR REPLACE PROCEDURE SYS.IDS_FGA_TRAP_HANDLER(
+                    object_schema VARCHAR2,
+                    object_name   VARCHAR2,
+                    policy_name   VARCHAR2
+                ) AS
+                    PRAGMA AUTONOMOUS_TRANSACTION;
+                    v_user VARCHAR2(100) := SYS_CONTEXT('USERENV', 'SESSION_USER');
+                    v_sql  VARCHAR2(4000) := SUBSTR(SYS_CONTEXT('USERENV', 'CURRENT_SQL'), 1, 2000);
+                    v_type VARCHAR2(100) := 'HONEYTOKEN_TRAP_BLOCK';
+                BEGIN
+                    IF v_user IN ('SYS', 'SYSTEM') THEN
+                        RETURN;
+                    END IF;
+                    IF REGEXP_LIKE(v_sql, '\\b(COUNT|SUM|AVG|STDDEV|VARIANCE)\\s*\\(', 'i')
+                       AND NOT REGEXP_LIKE(v_sql, 'NV_TRAP', 'i')
+                       AND NOT REGEXP_LIKE(v_sql, '(\\bOR\\b\\s+1\\s*=\\s*1|\\bUNION\\b\\s+\\bSELECT\\b|--)', 'i') THEN
+                        RETURN;
+                    END IF;
+                    IF REGEXP_LIKE(v_sql, '(\\bOR\\b\\s+1\\s*=\\s*1|\\bOR\\b\\s+''1''\\s*=\\s*''1''|\\bUNION\\b\\s+\\bSELECT\\b)', 'i') THEN
+                        v_type := 'SQL_INJECTION_BLOCK';
+                    END IF;
+                    INSERT INTO SYS.IDS_TRIGGER_ALERTS (db_user, attack_type, details)
+                    VALUES (
+                        v_user,
+                        v_type,
+                        NVL(v_sql, 'SELECT * FROM SYS.NV WHERE manv = ''NV_TRAP''')
+                    );
+                    COMMIT;
+                    RAISE_APPLICATION_ERROR(-20003, 'IDS ACTIVE BLOCK (ORA-20003): Phat hien hanh vi doc trom du lieu nhay cam / SQL Injection cham bay Honeytoken NV_TRAP! Truy van SELECT bi tu choi tuc thoi!');
+                END;
+                """
+            )
+        except Exception:
+            pass
+
+        try:
+            cur.execute(
+                "SELECT policy_name, handler_module FROM dba_audit_policies "
                 "WHERE object_name = 'NV' AND policy_name IN ('FGA_HONEYTOKEN_TRAP', 'FGA_HIGH_SALARY_ACCESS')"
             )
-            existing_fga = {r[0] for r in cur.fetchall()}
+            existing_fga_rows = cur.fetchall()
+            existing_fga = {r[0]: r[1] for r in existing_fga_rows}
             # Xác định schema vật lý của bảng NV (SYSTEM hoặc SYS)
             cur.execute(
                 "SELECT owner FROM dba_tables WHERE table_name = 'NV' AND owner IN ('SYSTEM', 'SYS') ORDER BY DECODE(owner, 'SYSTEM', 1, 2)"
@@ -235,7 +292,15 @@ def ensure_utf8_database_objects():
             row_owner = cur.fetchone()
             target_schema = row_owner[0] if row_owner else "SYSTEM"
 
-            if "FGA_HONEYTOKEN_TRAP" not in existing_fga:
+            if existing_fga.get("FGA_HONEYTOKEN_TRAP") != "IDS_FGA_TRAP_HANDLER":
+                if "FGA_HONEYTOKEN_TRAP" in existing_fga:
+                    try:
+                        cur.execute(
+                            "BEGIN DBMS_FGA.DROP_POLICY(object_schema => :sch, object_name => 'NV', policy_name => 'FGA_HONEYTOKEN_TRAP'); END;",
+                            sch=target_schema,
+                        )
+                    except Exception:
+                        pass
                 cur.execute(
                     """
                     BEGIN
@@ -245,6 +310,8 @@ def ensure_utf8_database_objects():
                             policy_name     => 'FGA_HONEYTOKEN_TRAP',
                             audit_condition => 'manv = ''NV_TRAP''',
                             audit_column    => NULL,
+                            handler_schema  => 'SYS',
+                            handler_module  => 'IDS_FGA_TRAP_HANDLER',
                             statement_types => 'SELECT, UPDATE, DELETE',
                             enable          => TRUE
                         );
@@ -449,14 +516,25 @@ def grant_dml_user(username):
         return False, str(e)
 
 
-def clear_alert_history(target="all", alert_id=None, alert_key=None):
+def clear_alert_history(
+    target="all",
+    alert_id=None,
+    alert_key=None,
+    reviewed_keys=None,
+    reviewed_fga_keys=None,
+    reviewed_trigger_ids=None,
+    reviewed_audit_keys=None,
+):
     """
     Xóa lịch sử cảnh báo:
     - target == 'ids': Xóa các cảnh báo phân tích từ Audit Log (đặt mốc thời gian mới)
     - target == 'triggers': Xóa toàn bộ bản ghi trong SYS.IDS_TRIGGER_ALERTS
-    - target == 'all': Xóa cả hai + tự động mở khóa và khôi phục quyền FULL DML cho các User thực nghiệm
+    - target == 'fga': Xóa lịch sử sự kiện FGA (đặt mốc fga_cleared_at)
+    - target == 'audit': Xóa lịch sử Unified Audit Trail (đặt mốc audit_cleared_at & dọn bộ nhớ Oracle)
+    - target == 'reviewed': Xóa vĩnh viễn các mục đã kiểm duyệt khỏi bộ nhớ
+    - target == 'all': Xóa toàn bộ + tự động mở khóa và khôi phục quyền FULL DML cho các User thực nghiệm
     - target == 'single_trigger': Xóa 1 dòng trong SYS.IDS_TRIGGER_ALERTS theo alert_id
-    - target == 'single_ids': Ẩn 1 dòng cảnh báo IDS theo alert_key
+    - target == 'single_ids': Xóa 1 dòng cảnh báo IDS theo alert_key
     """
     try:
         conn = get_connection()
@@ -479,8 +557,84 @@ def clear_alert_history(target="all", alert_id=None, alert_key=None):
             conn.close()
             return True, f"Đã xóa bản ghi Trigger #{alert_id}!"
 
-        if target in ("ids", "all", "audit"):
+        if target == "reviewed":
+            for k in (reviewed_keys or []):
+                ks = str(k)
+                APP_STATE["dismissed_keys"].add(ks)
+                APP_STATE.get("alert_history", {}).pop(ks, None)
+            for fk in (reviewed_fga_keys or []):
+                APP_STATE.setdefault("dismissed_fga_keys", set()).add(str(fk))
+            for ak in (reviewed_audit_keys or []):
+                APP_STATE.setdefault("dismissed_audit_keys", set()).add(str(ak))
+            for tid in (reviewed_trigger_ids or []):
+                try:
+                    cur.execute("DELETE FROM SYS.IDS_TRIGGER_ALERTS WHERE alert_id = :id", id=int(tid))
+                except Exception:
+                    pass
+            conn.commit()
+            # Nếu toàn bộ cảnh báo đã được duyệt và xóa hết, cập nhật mốc thời gian và giải phóng bộ nhớ Audit Trail
+            remaining_active = [
+                k for k in APP_STATE.get("alert_history", {}) if k not in APP_STATE["dismissed_keys"]
+            ]
+            if not remaining_active and reviewed_keys:
+                APP_STATE["alerts_cleared_at"] = now_str
+                APP_STATE["alert_history"] = {}
+                APP_STATE["dismissed_keys"].clear()
+                try:
+                    cur.execute(
+                        """
+                        BEGIN
+                            DBMS_AUDIT_MGMT.CLEAN_AUDIT_TRAIL(
+                                audit_trail_type => DBMS_AUDIT_MGMT.AUDIT_TRAIL_UNIFIED,
+                                use_last_arch_timestamp => FALSE
+                            );
+                        END;
+                        """
+                    )
+                except Exception:
+                    pass
+            save_persisted_state()
+            cur.close()
+            conn.close()
+            return True, "Đã xóa vĩnh viễn các cảnh báo đã kiểm duyệt khỏi bộ nhớ!"
+
+        if target == "fga":
+            APP_STATE["fga_cleared_at"] = now_str
+            APP_STATE.setdefault("dismissed_fga_keys", set()).clear()
+            save_persisted_state()
+            cur.close()
+            conn.close()
+            return True, "Đã xóa lịch sử sự kiện FGA!"
+
+        if target == "audit":
+            APP_STATE["audit_cleared_at"] = now_str
+            APP_STATE.setdefault("dismissed_audit_keys", set()).clear()
+            save_persisted_state()
+            try:
+                cur.execute(
+                    """
+                    BEGIN
+                        DBMS_AUDIT_MGMT.CLEAN_AUDIT_TRAIL(
+                            audit_trail_type => DBMS_AUDIT_MGMT.AUDIT_TRAIL_UNIFIED,
+                            use_last_arch_timestamp => FALSE
+                        );
+                    END;
+                    """
+                )
+            except Exception:
+                pass
+            conn.commit()
+            cur.close()
+            conn.close()
+            return True, "Đã xóa nhật ký Unified Audit Trail và giải phóng bộ nhớ!"
+
+        if target in ("ids", "all"):
             APP_STATE["alerts_cleared_at"] = now_str
+            if target == "all":
+                APP_STATE["fga_cleared_at"] = now_str
+                APP_STATE["audit_cleared_at"] = now_str
+                APP_STATE.setdefault("dismissed_fga_keys", set()).clear()
+                APP_STATE.setdefault("dismissed_audit_keys", set()).clear()
             APP_STATE["dismissed_keys"].clear()
             APP_STATE["alert_history"] = {}
             try:
@@ -705,32 +859,58 @@ def analyze_audit_logs(audit_rows, failed_rows, trig_rows, user_info_map, auto_b
     suspicious_client_by_user = {}
 
     # -------------------------------------------------------------------------
-    # 0. Đưa các vi phạm bị chặn bởi Trigger nội sinh (SYS.IDS_TRIGGER_ALERTS) vào kho cảnh báo
+    # 0. Đưa các vi phạm bị chặn bởi Trigger nội sinh / FGA Handler (SYS.IDS_TRIGGER_ALERTS) vào kho cảnh báo
     # -------------------------------------------------------------------------
     for t_row in trig_rows:
         t_id = t_row.get("ALERT_ID")
         t_time = str(t_row.get("EVENT_TIME") or t_row.get("EVENT_TIMESTAMP") or "").strip()
         t_user = str(t_row.get("DB_USER") or "UNKNOWN").strip().upper()
-        t_type = str(t_row.get("ATTACK_TYPE") or "TRIGGER_BLOCK").strip()
+        t_type = str(t_row.get("ATTACK_TYPE") or "TRIGGER_BLOCK").strip().upper()
         t_details = str(t_row.get("DETAILS") or "").strip()
         if is_event_cleared(t_user, t_time):
             continue
         alert_key = f"TRIG|{t_id}|{t_user}|{t_time}"
         if alert_key not in APP_STATE["dismissed_keys"]:
-            vn_label = (
-                "Trigger Block: Gian lận tăng lương > 50% (ORA-20002)"
-                if "SALARY" in t_type
-                else "Trigger Block: Xóa nhân viên trái phép (ORA-20001)"
-            )
+            if "HONEYTOKEN" in t_type or "FGA_HONEYTOKEN" in t_type:
+                vn_label = "SDB Direct Attack & Honeytoken Trap (Chặn tức thời ORA-20003)"
+                t_sev = "CRITICAL"
+                t_score = 95
+                t_row_meta = {
+                    "CLIENT_PROGRAM_NAME": "FGA Handler Block (ORA-20003)",
+                    "USERHOST": "SYS.IDS_FGA_TRAP_HANDLER",
+                    "FGA_POLICY_NAME": "FGA_HONEYTOKEN_TRAP",
+                    "AUDIT_TYPE": "FineGrainedAudit",
+                }
+            elif "SQL_INJECTION" in t_type or "SQLI" in t_type:
+                vn_label = "SQL Injection Attack (Chặn tức thời ORA-20003)"
+                t_sev = "CRITICAL"
+                t_score = 95
+                t_row_meta = {
+                    "CLIENT_PROGRAM_NAME": "FGA Handler Block (ORA-20003)",
+                    "USERHOST": "SYS.IDS_FGA_TRAP_HANDLER",
+                    "FGA_POLICY_NAME": "FGA_HONEYTOKEN_TRAP",
+                    "AUDIT_TYPE": "FineGrainedAudit",
+                }
+            elif "SALARY" in t_type:
+                vn_label = "Trigger Block: Gian lận tăng lương > 50% (ORA-20002)"
+                t_sev = "HIGH"
+                t_score = 65
+                t_row_meta = {"CLIENT_PROGRAM_NAME": "Database Trigger", "USERHOST": "SYS.TRG_PROTECT_NV"}
+            else:
+                vn_label = "Trigger Block: Xóa nhân viên trái phép (ORA-20001)"
+                t_sev = "HIGH"
+                t_score = 65
+                t_row_meta = {"CLIENT_PROGRAM_NAME": "Database Trigger", "USERHOST": "SYS.TRG_PROTECT_NV"}
+
             item = make_alert_item(
                 key=alert_key,
-                severity="HIGH",
-                risk_score=65,
+                severity=t_sev,
+                risk_score=t_score,
                 event_time=t_time,
                 user=t_user,
                 attack_type=vn_label,
                 details=t_details,
-                row={"CLIENT_PROGRAM_NAME": "Database Trigger", "USERHOST": "SYS.TRG_PROTECT_NV"},
+                row=t_row_meta,
             )
             APP_STATE["alert_history"][alert_key] = item
 
@@ -763,7 +943,9 @@ def analyze_audit_logs(audit_rows, failed_rows, trig_rows, user_info_map, auto_b
         sql_text = str(row.get("SQL_TEXT") or "").strip()
         action = str(row.get("ACTION_NAME") or "").strip().upper()
         raw_user = str(row.get("DBUSERNAME") or "").strip().upper()
-        user = "U1" if raw_user in ("SYS", "SYSTEM") else raw_user
+        if raw_user in ("SYS", "SYSTEM"):
+            continue
+        user = raw_user
         event_time = str(row.get("EVENT_TIMESTAMP") or "").strip()
         fga_policy = str(row.get("FGA_POLICY_NAME") or "").strip().upper()
         audit_type = str(row.get("AUDIT_TYPE") or "").strip()
@@ -779,6 +961,42 @@ def analyze_audit_logs(audit_rows, failed_rows, trig_rows, user_info_map, auto_b
             continue
 
         norm_sql = re.sub(r"\s+", " ", sql_text).upper()
+        # Bỏ qua các câu lệnh tra cứu Dictionary nội bộ tự động của Oracle SQL Developer / JDBC
+        if any(
+            ide_kw in norm_sql
+            for ide_kw in (
+                "FROM ALL_OBJECTS",
+                "FROM ALL_TAB_COLS",
+                "FROM ALL_SYNONYMS",
+                "FROM ALL_TABLES",
+                "FROM ALL_VIEWS",
+                "FROM ALL_USERS",
+                "FROM ALL_PROCEDURES",
+                "FROM ALL_ARGUMENTS",
+                "FROM ALL_CONSTRAINTS",
+                "FROM ALL_INDEXES",
+                "FROM ALL_TRIGGERS",
+                "FROM ALL_SOURCE",
+                "_CURRENT_EDITION_OBJ",
+                "NLS_SESSION_PARAMETERS",
+                "DBMS_APPLICATION_INFO",
+                "DBMS_OUTPUT.",
+                "FROM DUAL",
+                "FROM SYS.DUAL",
+                "DATABASE_COMPATIBLE_LEVEL",
+                "V$OPTION",
+                "V$VERSION",
+                "USER_ROLE_PRIVS",
+                "USER_USERS",
+                "DG_COUNT",
+                "TAB_COUNT",
+                "INST_COUNT",
+                "SYS_CONTEXT('USERENV', 'CON_ID')",
+                "SYS_CONTEXT('USERENV', 'SERVICE_NAME')",
+            )
+        ):
+            continue
+
         is_stat_query = bool(
             action == "SELECT"
             and sql_text
@@ -862,7 +1080,7 @@ def analyze_audit_logs(audit_rows, failed_rows, trig_rows, user_info_map, auto_b
             or "DELETE FROM" in norm_sql
             or "INSERT INTO" in norm_sql
         )
-        if is_dml_statement and (return_code in (1031, 2004, 41900) or return_code != 0):
+        if is_dml_statement and return_code in (1031, 2004, 41900):
             if "DELETE" in norm_sql or action == "DELETE":
                 dml_action_vn = "Xóa nhân viên (DELETE)"
             elif "UPDATE" in norm_sql or action == "UPDATE":
@@ -1104,10 +1322,7 @@ def analyze_audit_logs(audit_rows, failed_rows, trig_rows, user_info_map, auto_b
         active_user_trigs = [
             t
             for t in trig_rows
-            if (
-                str(t.get("DB_USER") or "").upper() == user
-                or (user == "U1" and str(t.get("DB_USER") or "").upper() in ("SYS", "SYSTEM"))
-            )
+            if str(t.get("DB_USER") or "").upper() == user
             and is_event_active_for_user_risk(user, str(t.get("EVENT_TIMESTAMP") or t.get("EVENT_TIME") or ""))
         ]
 
@@ -1235,7 +1450,7 @@ def get_dashboard_data(do_flush=False):
                 APP_STATE.setdefault("initialized_users", set()).add(uname)
         priv_map = fetch_user_dml_privileges(cur, monitored_usernames)
 
-        # 1. Lấy log truy vấn chung từ UNIFIED_AUDIT_TRAIL (chỉ lấy sau mốc reset alerts_cleared_at)
+        # 1. Lấy log truy vấn chung từ UNIFIED_AUDIT_TRAIL (chỉ lấy sau mốc reset alerts_cleared_at, loại bỏ truy vấn khởi tạo nội bộ của SQL Developer)
         cutoff_str = APP_STATE.get("alerts_cleared_at") or "1970-01-01 00:00:00"
         query_audit = f"""
             SELECT TO_CHAR(event_timestamp, 'YYYY-MM-DD HH24:MI:SS') AS EVENT_TIMESTAMP,
@@ -1252,11 +1467,17 @@ def get_dashboard_data(do_flush=False):
                    fga_policy_name AS FGA_POLICY_NAME,
                    unified_audit_policies AS UNIFIED_AUDIT_POLICIES
             FROM unified_audit_trail
-            WHERE (dbusername IN ({in_clause})
-               OR (dbusername IN ('SYS', 'SYSTEM') AND (object_name = 'NV' OR fga_policy_name IS NOT NULL) AND LOWER(NVL(client_program_name, '')) NOT LIKE '%python%'))
+            WHERE dbusername IN ({in_clause})
               AND TO_CHAR(event_timestamp, 'YYYY-MM-DD HH24:MI:SS') > :cutoff
+              AND NVL(object_name, 'NONE') NOT IN (
+                  'DUAL', 'ALL_OBJECTS', 'ALL_TAB_COLS', 'ALL_SYNONYMS', 'ALL_TABLES',
+                  'ALL_VIEWS', 'ALL_USERS', 'ALL_PROCEDURES', 'ALL_ARGUMENTS',
+                  'ALL_CONSTRAINTS', 'ALL_INDEXES', 'ALL_TRIGGERS', 'ALL_SOURCE',
+                  'NLS_SESSION_PARAMETERS', 'V$OPTION', 'V$VERSION', 'USER_ROLE_PRIVS',
+                  'DATABASE_COMPATIBLE_LEVEL', 'USER_USERS', 'DBMS_APPLICATION_INFO', 'DBMS_OUTPUT'
+              )
             ORDER BY event_timestamp DESC
-            FETCH FIRST 100 ROWS ONLY
+            FETCH FIRST 250 ROWS ONLY
         """
         audit_rows = fetch_rows_as_dicts(cur, query_audit, {"cutoff": cutoff_str})
 
@@ -1275,15 +1496,16 @@ def get_dashboard_data(do_flush=False):
                    client_program_name AS CLIENT_PROGRAM_NAME,
                    return_code AS RETURN_CODE
             FROM unified_audit_trail
-            WHERE (dbusername IN ({in_clause})
-               OR (dbusername IN ('SYS', 'SYSTEM') AND (object_name = 'NV' OR fga_policy_name IS NOT NULL) AND LOWER(NVL(client_program_name, '')) NOT LIKE '%python%'))
+            WHERE dbusername IN ({in_clause})
               AND (audit_type = 'FineGrainedAudit' OR fga_policy_name IS NOT NULL)
               AND TO_CHAR(event_timestamp, 'YYYY-MM-DD HH24:MI:SS') > :cutoff
             ORDER BY event_timestamp DESC
             FETCH FIRST 50 ROWS ONLY
         """
         try:
-            raw_fga_rows = fetch_rows_as_dicts(cur, query_fga, {"cutoff": cutoff_str})
+            fga_cutoff = max(cutoff_str, APP_STATE.get("fga_cleared_at") or "")
+            raw_fga_rows = fetch_rows_as_dicts(cur, query_fga, {"cutoff": fga_cutoff})
+            dismissed_fga = APP_STATE.get("dismissed_fga_keys", set())
             # Lọc bỏ các dòng FGA_HONEYTOKEN_TRAP phát sinh phụ từ câu lệnh hàm thống kê (COUNT/SUM/AVG) không nhắm vào NV_TRAP
             fga_rows = [
                 r
@@ -1293,6 +1515,8 @@ def get_dashboard_data(do_flush=False):
                     and STAT_FUNC_PATTERNS.search(str(r.get("SQL_TEXT") or ""))
                     and not HONEYTOKEN_PATTERNS.search(str(r.get("SQL_TEXT") or ""))
                 )
+                and f"{r.get('EVENT_TIMESTAMP')}_{r.get('DBUSERNAME')}_{r.get('FGA_POLICY_NAME')}_{r.get('SQL_TEXT') or ''}"
+                not in dismissed_fga
             ]
         except Exception:
             fga_rows = []
@@ -1313,7 +1537,7 @@ def get_dashboard_data(do_flush=False):
         """
         failed_rows = fetch_rows_as_dicts(cur, query_failed_logon, {"cutoff": cutoff_str})
 
-        # 4. Lấy cảnh báo từ Trigger nội sinh
+        # 4. Lấy cảnh báo từ Trigger nội sinh & FGA Handler Block
         query_trig = """
             SELECT alert_id AS ALERT_ID,
                    TO_CHAR(event_time, 'YYYY-MM-DD HH24:MI:SS') AS EVENT_TIME,
@@ -1327,6 +1551,44 @@ def get_dashboard_data(do_flush=False):
             trig_rows = fetch_rows_as_dicts(cur, query_trig)
         except Exception:
             trig_rows = []
+
+        # Bổ sung các sự kiện FGA_HONEYTOKEN_TRAP bị chặn tức thời (ORA-20003) vào danh sách hiển thị FGA
+        try:
+            fga_cutoff = max(cutoff_str, APP_STATE.get("fga_cleared_at") or "")
+            dismissed_fga = APP_STATE.get("dismissed_fga_keys", set())
+            existing_fga_sigs = {
+                f"{r.get('EVENT_TIMESTAMP')}_{r.get('DBUSERNAME')}_{r.get('FGA_POLICY_NAME')}"
+                for r in fga_rows
+            }
+            for tr in trig_rows:
+                t_type = str(tr.get("ATTACK_TYPE") or "").upper()
+                t_time = str(tr.get("EVENT_TIME") or "")
+                t_user = str(tr.get("DB_USER") or "")
+                t_sql = str(tr.get("DETAILS") or "")
+                if ("HONEYTOKEN" in t_type or "SQL_INJECTION" in t_type) and (not fga_cutoff or t_time > fga_cutoff):
+                    sig = f"{t_time}_{t_user}_FGA_HONEYTOKEN_TRAP"
+                    fga_key = f"{t_time}_{t_user}_FGA_HONEYTOKEN_TRAP_{t_sql}"
+                    if sig not in existing_fga_sigs and fga_key not in dismissed_fga:
+                        fga_rows.append(
+                            {
+                                "EVENT_TIMESTAMP": t_time,
+                                "DBUSERNAME": t_user,
+                                "ACTION_NAME": "SELECT (BLOCKED ORA-20003)",
+                                "OBJECT_SCHEMA": "SYS",
+                                "OBJECT_NAME": "NV",
+                                "FGA_POLICY_NAME": "FGA_HONEYTOKEN_TRAP",
+                                "AUDIT_TYPE": "FineGrainedAudit",
+                                "SQL_TEXT": t_sql,
+                                "OS_USERNAME": "—",
+                                "USERHOST": "SYS.IDS_FGA_TRAP_HANDLER",
+                                "CLIENT_PROGRAM_NAME": "SQL Developer (Blocked)",
+                                "RETURN_CODE": 20003,
+                            }
+                        )
+                        existing_fga_sigs.add(sig)
+            fga_rows.sort(key=lambda x: str(x.get("EVENT_TIMESTAMP") or ""), reverse=True)
+        except Exception:
+            pass
 
         user_info_map = {}
         for u in initial_users:
@@ -1390,6 +1652,47 @@ def get_dashboard_data(do_flush=False):
         )
         max_risk = max((int(u.get("RISK_SCORE", 0)) for u in user_rows), default=0)
 
+        audit_cutoff = max(cutoff_str, APP_STATE.get("audit_cleared_at") or "")
+        dismissed_audit = APP_STATE.get("dismissed_audit_keys", set())
+        ide_meta_keywords = (
+            "FROM ALL_OBJECTS",
+            "FROM ALL_TAB_COLS",
+            "FROM ALL_SYNONYMS",
+            "FROM ALL_TABLES",
+            "FROM ALL_VIEWS",
+            "FROM ALL_USERS",
+            "FROM ALL_PROCEDURES",
+            "FROM ALL_ARGUMENTS",
+            "FROM ALL_CONSTRAINTS",
+            "FROM ALL_INDEXES",
+            "FROM ALL_TRIGGERS",
+            "FROM ALL_SOURCE",
+            "_CURRENT_EDITION_OBJ",
+            "NLS_SESSION_PARAMETERS",
+            "DBMS_APPLICATION_INFO",
+            "DBMS_OUTPUT.",
+            "FROM DUAL",
+            "FROM SYS.DUAL",
+            "DATABASE_COMPATIBLE_LEVEL",
+            "V$OPTION",
+            "V$VERSION",
+            "USER_ROLE_PRIVS",
+            "USER_USERS",
+            "DG_COUNT",
+            "TAB_COUNT",
+            "INST_COUNT",
+            "SYS_CONTEXT('USERENV', 'CON_ID')",
+            "SYS_CONTEXT('USERENV', 'SERVICE_NAME')",
+        )
+        display_audit_rows = [
+            r
+            for r in audit_rows
+            if (not audit_cutoff or str(r.get("EVENT_TIMESTAMP") or "") > audit_cutoff)
+            and not any(kw in re.sub(r"\s+", " ", str(r.get("SQL_TEXT") or "")).upper() for kw in ide_meta_keywords)
+            and f"{r.get('EVENT_TIMESTAMP')}_{r.get('DBUSERNAME')}_{r.get('ACTION_NAME')}_{(r.get('SQL_TEXT') or '')[:40]}"
+            not in dismissed_audit
+        ]
+
         return {
             "ok": True,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -1399,7 +1702,7 @@ def get_dashboard_data(do_flush=False):
             "auto_locked": auto_locked,
             "auto_revoked": auto_revoked,
             "metrics": {
-                "audit_count": len(audit_rows),
+                "audit_count": len(display_audit_rows),
                 "alert_count": len(alerts),
                 "trigger_count": len(trig_rows),
                 "fga_count": len(fga_rows),
@@ -1411,7 +1714,7 @@ def get_dashboard_data(do_flush=False):
             "alerts": alerts,
             "fga_events": fga_rows,
             "triggers": trig_rows,
-            "audit_logs": audit_rows,
+            "audit_logs": display_audit_rows,
             "failed_logons": failed_rows,
             "employees": nv_rows,
         }
@@ -4108,7 +4411,15 @@ class IDSRequestHandler(BaseHTTPRequestHandler):
             target = payload.get("target", "all")
             alert_id = payload.get("alert_id")
             alert_key = payload.get("alert_key")
-            ok, msg = clear_alert_history(target=target, alert_id=alert_id, alert_key=alert_key)
+            ok, msg = clear_alert_history(
+                target=target,
+                alert_id=alert_id,
+                alert_key=alert_key,
+                reviewed_keys=payload.get("reviewed_keys"),
+                reviewed_fga_keys=payload.get("reviewed_fga_keys"),
+                reviewed_trigger_ids=payload.get("reviewed_trigger_ids"),
+                reviewed_audit_keys=payload.get("reviewed_audit_keys"),
+            )
             self._send_json({"ok": ok, "message": msg})
         elif parsed.path == "/api/toggle-ips":
             APP_STATE["auto_response"] = bool(payload.get("auto_response", True))
@@ -4184,9 +4495,16 @@ def sync_with_web_dashboard():
                             clear_alert_history(
                                 target=payload.get("target", "all"),
                                 alert_id=payload.get("alert_id"),
-                                alert_key=payload.get("alert_key")
+                                alert_key=payload.get("alert_key"),
+                                reviewed_keys=payload.get("reviewed_keys"),
+                                reviewed_fga_keys=payload.get("reviewed_fga_keys"),
+                                reviewed_trigger_ids=payload.get("reviewed_trigger_ids"),
+                                reviewed_audit_keys=payload.get("reviewed_audit_keys"),
                             )
                             print("[*] Dashboard yeu cau: Da reset / xoa lich su canh bao.")
+                        elif c_type == "toggle_ips":
+                            APP_STATE["auto_response"] = bool(payload.get("auto_response", True))
+                            save_persisted_state()
         except Exception:
             pass
         time.sleep(2)
@@ -4204,7 +4522,8 @@ def main():
     print("  Nhan Ctrl+C de dung server.")
     print("=" * 68)
 
-    threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+    if os.getenv("NO_BROWSER") != "1":
+        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Sidebar } from './components/Sidebar';
-import { Header, LayoutWidthMode, UiDensityMode } from './components/Header';
+import { Header, LayoutWidthMode, UiDensityMode, ThemeMode } from './components/Header';
 import { OverviewTab } from './components/tabs/OverviewTab';
 import { AlertsTab } from './components/tabs/AlertsTab';
 import { FgaTab } from './components/tabs/FgaTab';
@@ -51,6 +51,7 @@ import {
 } from './data/initialData';
 
 export default function App() {
+  const shouldReduceMotion = useReducedMotion();
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
   const [users, setUsers] = useState<DbUser[]>(INITIAL_USERS);
   const [alerts, setAlerts] = useState<AlertItem[]>(INITIAL_ALERTS);
@@ -76,6 +77,14 @@ export default function App() {
   const reviewedKeysRef = useRef<Set<string>>(new Set());
   const auditCutoffRef = useRef<string | null>(null);
   const reviewedAuditKeysRef = useRef<Set<string>>(new Set());
+  const reviewedFgaKeysRef = useRef<Set<string>>(new Set());
+  const dismissedFgaKeysRef = useRef<Set<string>>(new Set());
+  const fgaCutoffRef = useRef<string | null>(null);
+  const reviewedTriggerIdsRef = useRef<Set<number>>(new Set());
+  const dismissedTriggerIdsRef = useRef<Set<number>>(new Set());
+
+  const getFgaKey = (f: FgaEvent) =>
+    `${f.EVENT_TIMESTAMP}_${f.DBUSERNAME}_${f.FGA_POLICY_NAME}_${f.SQL_TEXT || ''}`;
 
   // PDF Security Report Export Modal state
   const [pdfExportOpen, setPdfExportOpen] = useState<boolean>(false);
@@ -99,18 +108,20 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [layoutWidth, setLayoutWidth] = useState<LayoutWidthMode>('boxed');
   const [uiDensity, setUiDensity] = useState<UiDensityMode>('comfortable');
+  const [themeMode, setThemeMode] = useState<ThemeMode>('dark');
 
   // Modal inspection states
   const [modalOpen, setModalOpen] = useState<boolean>(false);
   const [selectedAlertKey, setSelectedAlertKey] = useState<string | null>(null);
   const [selectedAuditRowIndex, setSelectedAuditRowIndex] = useState<number | null>(null);
+  const [customModalAuditRow, setCustomModalAuditRow] = useState<AuditLogRow | null>(null);
 
-  // Toasts
+  // Toasts (capped at 3 concurrent items to avoid covering viewport)
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
   const addToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
     const id = Date.now().toString() + Math.random().toString();
-    setToasts((prev) => [...prev, { id, type, message }]);
+    setToasts((prev) => [...prev.slice(-2), { id, type, message }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4500);
@@ -170,10 +181,10 @@ export default function App() {
     [displayAlerts, selectedAlertKey]
   );
 
-  const selectedAuditRow = useMemo(
-    () => (selectedAuditRowIndex !== null ? displayAuditLogs[selectedAuditRowIndex] || null : null),
-    [displayAuditLogs, selectedAuditRowIndex]
-  );
+  const selectedAuditRow = useMemo(() => {
+    if (customModalAuditRow) return customModalAuditRow;
+    return selectedAuditRowIndex !== null ? displayAuditLogs[selectedAuditRowIndex] || null : null;
+  }, [customModalAuditRow, displayAuditLogs, selectedAuditRowIndex]);
 
   // Metrics calculation
   const metrics: Metrics = useMemo(
@@ -192,11 +203,14 @@ export default function App() {
   const syncFromOracleBackend = useCallback(
     async (notifyManual: boolean = false) => {
       try {
-        const res = await fetch('/api/data');
-        if (!res.ok) return;
+        const res = await fetch(notifyManual ? '/api/data?flush=1' : '/api/data');
+        if (!res.ok) {
+          setIsBridgeConnected(false);
+          return;
+        }
         const data = await res.json();
         if (data && data.ok) {
-          setIsBridgeConnected(true);
+          setIsBridgeConnected(Boolean(data.oracle_bridge_connected ?? data.bridge_connected ?? false));
           if (Array.isArray(data.alerts)) {
             const incomingAlerts: AlertItem[] = data.alerts.map((a: AlertItem) => ({
               ...a,
@@ -217,8 +231,38 @@ export default function App() {
             setAlerts(incomingAlerts);
           }
           if (Array.isArray(data.users)) setUsers(data.users);
-          if (Array.isArray(data.fga_events)) setFgaEvents(data.fga_events);
-          if (Array.isArray(data.triggers)) setTriggers(data.triggers);
+          if (Array.isArray(data.fga_events)) {
+            const incomingFga = data.fga_events
+              .filter((f: FgaEvent) => {
+                const k = getFgaKey(f);
+                if (dismissedFgaKeysRef.current.has(k)) return false;
+                if (
+                  fgaCutoffRef.current &&
+                  f.EVENT_TIMESTAMP &&
+                  f.EVENT_TIMESTAMP <= fgaCutoffRef.current
+                ) {
+                  return false;
+                }
+                return true;
+              })
+              .map((f: FgaEvent) => {
+                const k = getFgaKey(f);
+                return {
+                  ...f,
+                  reviewed: f.reviewed || reviewedFgaKeysRef.current.has(k),
+                };
+              });
+            setFgaEvents(incomingFga);
+          }
+          if (Array.isArray(data.triggers)) {
+            const incomingTriggers = data.triggers
+              .filter((t: TriggerAlert) => !dismissedTriggerIdsRef.current.has(t.ALERT_ID))
+              .map((t: TriggerAlert) => ({
+                ...t,
+                reviewed: t.reviewed || reviewedTriggerIdsRef.current.has(t.ALERT_ID),
+              }));
+            setTriggers(incomingTriggers);
+          }
           if (Array.isArray(data.audit_logs)) {
             const incomingAudit = data.audit_logs
               .filter(
@@ -240,9 +284,11 @@ export default function App() {
           setLastSyncTime(
             data.last_oracle_sync || new Date().toISOString().replace('T', ' ').substring(0, 19)
           );
+        } else {
+          setIsBridgeConnected(false);
         }
       } catch {
-        // Fallback silently if offline
+        setIsBridgeConnected(false);
       }
     },
     [addToast, privacyMode]
@@ -275,6 +321,10 @@ export default function App() {
 
   // Execute SQL batch from Oracle SQL Developer Worksheet Live Sync
   const handleExecuteOracleSql = async (sql: string, dbUser: string): Promise<string[]> => {
+    const recentUserAudit = auditLogs.find((r) => r.DBUSERNAME === dbUser);
+    const sessionHost = recentUserAudit?.USERHOST || 'LAPTOP-R03ORTGV';
+    const sessionOsUser = recentUserAudit?.OS_USERNAME || 'pc';
+
     try {
       const res = await fetch('/api/execute-oracle-sql', {
         method: 'POST',
@@ -282,8 +332,8 @@ export default function App() {
         body: JSON.stringify({
           sql,
           dbUser,
-          host: 'LAPTOP-R03ORTGV',
-          osUser: 'pc',
+          host: sessionHost,
+          osUser: sessionOsUser,
           client: 'SQL Developer',
         }),
       });
@@ -316,8 +366,8 @@ export default function App() {
       alerts,
       triggers,
       autoResponse,
-      'LAPTOP-R03ORTGV',
-      'pc',
+      sessionHost,
+      sessionOsUser,
       'SQL Developer'
     );
 
@@ -388,7 +438,13 @@ export default function App() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, action }),
-    }).catch(() => {});
+    })
+      .then((res) => {
+        if (!res.ok) setIsBridgeConnected(false);
+      })
+      .catch(() => {
+        setIsBridgeConnected(false);
+      });
 
     const displayUser = maskUsername(username, privacyMode);
     if (action === 'lock') {
@@ -404,6 +460,22 @@ export default function App() {
 
   // --- SOC Review & Reset Handlers ---
 
+  const getAuditKey = (row: AuditLogRow, _idx?: number) =>
+    `${row.EVENT_TIMESTAMP}_${row.DBUSERNAME}_${row.ACTION_NAME}_${(row.SQL_TEXT || '').slice(0, 40)}`;
+
+  const syncReviewStateToServer = () => {
+    fetch('/api/review-state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        reviewed_alert_keys: Array.from(reviewedKeysRef.current),
+        reviewed_fga_keys: Array.from(reviewedFgaKeysRef.current),
+        reviewed_trigger_ids: Array.from(reviewedTriggerIdsRef.current),
+        reviewed_audit_keys: Array.from(reviewedAuditKeysRef.current),
+      }),
+    }).catch(() => {});
+  };
+
   // 1. Alerts Review & Reset
   const handleToggleReviewAlert = (key: string) => {
     if (reviewedKeysRef.current.has(key)) {
@@ -414,16 +486,19 @@ export default function App() {
     setAlerts((prev) =>
       prev.map((a) => (a.key === key ? { ...a, reviewed: !a.reviewed } : a))
     );
+    syncReviewStateToServer();
   };
 
   const handleMarkAllAlertsReviewed = () => {
     alerts.forEach((a) => reviewedKeysRef.current.add(a.key));
     setAlerts((prev) => prev.map((a) => ({ ...a, reviewed: true })));
+    syncReviewStateToServer();
     addToast(`Đã đánh dấu kiểm duyệt tất cả ${alerts.length} cảnh báo IDS!`, 'success');
   };
 
   const handleResetReviewedAlerts = () => {
     const reviewedKeys = alerts.filter((a) => a.reviewed).map((a) => a.key);
+    reviewedKeys.forEach((k) => reviewedKeysRef.current.delete(k));
     const remaining = alerts.filter((a) => !a.reviewed);
     const removedCount = alerts.length - remaining.length;
     setAlerts(remaining);
@@ -434,12 +509,13 @@ export default function App() {
       body: JSON.stringify({ target: 'reviewed', reviewed_keys: reviewedKeys }),
     }).catch(() => {});
     addToast(
-      `Đã Reset ${removedCount} cảnh báo đã kiểm duyệt và cập nhật lại điểm rủi ro User!`,
+      `Đã xóa vĩnh viễn ${removedCount} cảnh báo đã kiểm duyệt khỏi bộ nhớ và cập nhật lại điểm rủi ro!`,
       'success'
     );
   };
 
   const handleDismissSingleAlert = (key: string) => {
+    reviewedKeysRef.current.delete(key);
     const remaining = alerts.filter((a) => a.key !== key);
     setAlerts(remaining);
     setUsers((prevUsers) => recalculateUsersAfterReset(prevUsers, remaining));
@@ -448,71 +524,130 @@ export default function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ target: 'single_ids', alert_key: key }),
     }).catch(() => {});
-    addToast('Đã kiểm duyệt & Reset cảnh báo, đồng thời cập nhật lại Risk Score!', 'info');
+    addToast('Đã xóa cảnh báo khỏi bộ nhớ và cập nhật lại Risk Score!', 'info');
   };
 
   // 2. FGA Events Review & Reset
   const handleToggleReviewFga = (index: number) => {
     setFgaEvents((prev) =>
-      prev.map((item, idx) => (idx === index ? { ...item, reviewed: !item.reviewed } : item))
+      prev.map((item, idx) => {
+        if (idx === index) {
+          const next = !item.reviewed;
+          const k = getFgaKey(item);
+          if (next) reviewedFgaKeysRef.current.add(k);
+          else reviewedFgaKeysRef.current.delete(k);
+          return { ...item, reviewed: next };
+        }
+        return item;
+      })
     );
+    syncReviewStateToServer();
   };
 
   const handleMarkAllFgaReviewed = () => {
+    fgaEvents.forEach((item) => reviewedFgaKeysRef.current.add(getFgaKey(item)));
     setFgaEvents((prev) => prev.map((item) => ({ ...item, reviewed: true })));
+    syncReviewStateToServer();
     addToast(`Đã đánh dấu kiểm duyệt tất cả ${fgaEvents.length} sự kiện FGA!`, 'success');
   };
 
   const handleResetReviewedFga = () => {
+    const reviewedFga = fgaEvents.filter((item) => item.reviewed).map((item) => getFgaKey(item));
+    reviewedFga.forEach((k) => {
+      dismissedFgaKeysRef.current.add(k);
+      reviewedFgaKeysRef.current.delete(k);
+    });
     const remaining = fgaEvents.filter((item) => !item.reviewed);
     const removedCount = fgaEvents.length - remaining.length;
     setFgaEvents(remaining);
-    addToast(`Đã Reset ${removedCount} sự kiện FGA đã kiểm duyệt!`, 'success');
+    fetch('/api/clear-alerts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'reviewed', reviewed_fga_keys: reviewedFga }),
+    }).catch(() => {});
+    addToast(`Đã xóa vĩnh viễn ${removedCount} sự kiện FGA đã kiểm duyệt!`, 'success');
   };
 
   const handleClearSingleFga = (index: number) => {
+    const target = fgaEvents[index];
+    if (target) {
+      const fk = getFgaKey(target);
+      dismissedFgaKeysRef.current.add(fk);
+      reviewedFgaKeysRef.current.delete(fk);
+      fetch('/api/clear-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: 'reviewed', reviewed_fga_keys: [fk] }),
+      }).catch(() => {});
+    }
     setFgaEvents((prev) => prev.filter((_, idx) => idx !== index));
-    addToast('Đã kiểm duyệt & Reset sự kiện FGA!', 'info');
+    addToast('Đã xóa sự kiện FGA khỏi bộ nhớ!', 'info');
   };
 
   const handleClearAllFga = () => {
+    fgaEvents.forEach((item) => dismissedFgaKeysRef.current.add(getFgaKey(item)));
+    reviewedFgaKeysRef.current.clear();
+    const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    fgaCutoffRef.current = nowStr;
     setFgaEvents([]);
-    addToast('Đã Reset toàn bộ danh sách sự kiện FGA!', 'success');
+    fetch('/api/clear-alerts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'fga', cutoff: nowStr }),
+    }).catch(() => {});
+    addToast('Đã xóa toàn bộ danh sách sự kiện FGA khỏi bộ nhớ!', 'success');
   };
 
   // 3. Trigger Alerts Review & Reset
   const handleToggleReviewTrigger = (alertId: number) => {
+    if (reviewedTriggerIdsRef.current.has(alertId)) {
+      reviewedTriggerIdsRef.current.delete(alertId);
+    } else {
+      reviewedTriggerIdsRef.current.add(alertId);
+    }
     setTriggers((prev) =>
       prev.map((t) => (t.ALERT_ID === alertId ? { ...t, reviewed: !t.reviewed } : t))
     );
+    syncReviewStateToServer();
   };
 
   const handleMarkAllTriggersReviewed = () => {
+    triggers.forEach((t) => reviewedTriggerIdsRef.current.add(t.ALERT_ID));
     setTriggers((prev) => prev.map((t) => ({ ...t, reviewed: true })));
+    syncReviewStateToServer();
     addToast(`Đã đánh dấu kiểm duyệt tất cả ${triggers.length} bản ghi Trigger!`, 'success');
   };
 
   const handleResetReviewedTriggers = () => {
+    const reviewedTrigIds = triggers.filter((t) => t.reviewed).map((t) => t.ALERT_ID);
+    reviewedTrigIds.forEach((id) => {
+      dismissedTriggerIdsRef.current.add(id);
+      reviewedTriggerIdsRef.current.delete(id);
+    });
     const remaining = triggers.filter((t) => !t.reviewed);
     const removedCount = triggers.length - remaining.length;
     setTriggers(remaining);
-    addToast(`Đã Reset ${removedCount} bản ghi Trigger đã kiểm duyệt!`, 'success');
+    fetch('/api/clear-alerts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'reviewed', reviewed_trigger_ids: reviewedTrigIds }),
+    }).catch(() => {});
+    addToast(`Đã xóa vĩnh viễn ${removedCount} bản ghi Trigger đã kiểm duyệt khỏi CSDL!`, 'success');
   };
 
   const handleClearSingleTrigger = (alertId: number) => {
+    dismissedTriggerIdsRef.current.add(alertId);
+    reviewedTriggerIdsRef.current.delete(alertId);
     setTriggers((prev) => prev.filter((t) => t.ALERT_ID !== alertId));
     fetch('/api/clear-alerts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ target: 'single_trigger', alert_id: alertId }),
     }).catch(() => {});
-    addToast(`Đã kiểm duyệt & Reset bản ghi Trigger #${alertId}!`, 'info');
+    addToast(`Đã xóa vĩnh viễn bản ghi Trigger #${alertId} khỏi CSDL!`, 'info');
   };
 
   // 4. Unified Audit Trail Review & Reset
-  const getAuditKey = (row: AuditLogRow, idx: number) =>
-    `${row.EVENT_TIMESTAMP}_${row.DBUSERNAME}_${row.ACTION_NAME}_${row.SQL_TEXT || idx}`;
-
   const handleToggleReviewAudit = (index: number) => {
     setAuditLogs((prev) =>
       prev.map((row, idx) => {
@@ -521,59 +656,75 @@ export default function App() {
           const k = getAuditKey(row, idx);
           if (next) reviewedAuditKeysRef.current.add(k);
           else reviewedAuditKeysRef.current.delete(k);
-          return { ...row, reviewed: next };
+          return { ...itemOrRow(row), reviewed: next };
         }
         return row;
       })
     );
+    syncReviewStateToServer();
   };
+
+  const itemOrRow = (r: AuditLogRow) => r;
 
   const handleMarkAllAuditReviewed = () => {
     auditLogs.forEach((r, idx) => reviewedAuditKeysRef.current.add(getAuditKey(r, idx)));
     setAuditLogs((prev) => prev.map((row) => ({ ...row, reviewed: true })));
+    syncReviewStateToServer();
     addToast(`Đã đánh dấu kiểm duyệt toàn bộ ${auditLogs.length} bản ghi Audit Log!`, 'success');
   };
 
   const handleResetReviewedAudit = () => {
+    const reviewedAudKeys = auditLogs.filter((row) => row.reviewed).map((row) => getAuditKey(row));
+    reviewedAudKeys.forEach((k) => reviewedAuditKeysRef.current.delete(k));
     const remaining = auditLogs.filter((row) => !row.reviewed);
     const removedCount = auditLogs.length - remaining.length;
     setAuditLogs(remaining);
 
-    // Lưu mốc thời gian Reset kiểm toán để các lần đồng bộ tiếp theo không nạp lại log cũ
     const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
-    auditCutoffRef.current = nowStr;
+    if (remaining.length === 0) {
+      auditCutoffRef.current = nowStr;
+    }
 
     fetch('/api/clear-alerts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target: 'audit', cutoff: nowStr }),
+      body: JSON.stringify(
+        remaining.length === 0
+          ? { target: 'audit', cutoff: nowStr }
+          : { target: 'reviewed', reviewed_audit_keys: reviewedAudKeys, cutoff: nowStr }
+      ),
     }).catch(() => {});
 
-    addToast(`Đã Reset ${removedCount} bản ghi Audit Log đã kiểm duyệt!`, 'success');
+    addToast(`Đã xóa vĩnh viễn ${removedCount} bản ghi Audit Log đã kiểm duyệt!`, 'success');
   };
 
   const handleClearSingleAudit = (index: number) => {
     const targetRow = auditLogs[index];
     if (targetRow) {
-      reviewedAuditKeysRef.current.add(getAuditKey(targetRow, index));
+      const ak = getAuditKey(targetRow, index);
+      reviewedAuditKeysRef.current.delete(ak);
+      fetch('/api/clear-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: 'reviewed', reviewed_audit_keys: [ak] }),
+      }).catch(() => {});
     }
     setAuditLogs((prev) => prev.filter((_, idx) => idx !== index));
-    addToast('Đã kiểm duyệt & Reset bản ghi Unified Audit Trail!', 'info');
+    addToast('Đã xóa bản ghi Unified Audit Trail khỏi bộ nhớ!', 'info');
   };
 
   const handleResetAuditRowFromModal = () => {
     if (selectedAuditRowIndex !== null) {
-      const targetRow = auditLogs[selectedAuditRowIndex];
-      if (targetRow) {
-        reviewedAuditKeysRef.current.add(getAuditKey(targetRow, selectedAuditRowIndex));
-      }
-      setAuditLogs((prev) => prev.filter((_, idx) => idx !== selectedAuditRowIndex));
-      addToast('Đã kiểm duyệt & Reset bản ghi Unified Audit Trail!', 'info');
+      handleClearSingleAudit(selectedAuditRowIndex);
+    } else if (customModalAuditRow) {
+      setCustomModalAuditRow(null);
+      addToast('Đã đóng & xác nhận kiểm duyệt bản ghi chi tiết!', 'info');
     }
   };
 
   const handleClearAllAudit = () => {
     setAuditLogs([]);
+    reviewedAuditKeysRef.current.clear();
     const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
     auditCutoffRef.current = nowStr;
 
@@ -583,21 +734,40 @@ export default function App() {
       body: JSON.stringify({ target: 'audit', cutoff: nowStr }),
     }).catch(() => {});
 
-    addToast('Đã Reset toàn bộ nhật ký Unified Audit Trail!', 'success');
+    addToast('Đã xóa toàn bộ nhật ký Unified Audit Trail và giải phóng bộ nhớ!', 'success');
   };
 
   // 5. Global Overview Review & Reset (Across Alerts, FGA, and Triggers)
   const handleMarkAllSystemReviewed = () => {
     alerts.forEach((a) => reviewedKeysRef.current.add(a.key));
+    fgaEvents.forEach((f) => reviewedFgaKeysRef.current.add(getFgaKey(f)));
+    triggers.forEach((t) => reviewedTriggerIdsRef.current.add(t.ALERT_ID));
+    auditLogs.forEach((r, idx) => reviewedAuditKeysRef.current.add(getAuditKey(r, idx)));
     setAlerts((prev) => prev.map((a) => ({ ...a, reviewed: true })));
     setFgaEvents((prev) => prev.map((f) => ({ ...f, reviewed: true })));
     setTriggers((prev) => prev.map((t) => ({ ...t, reviewed: true })));
     setAuditLogs((prev) => prev.map((r) => ({ ...r, reviewed: true })));
+    syncReviewStateToServer();
     addToast('Đã đánh dấu ĐÃ KIỂM DUYỆT cho toàn bộ Cảnh báo, FGA, Trigger và Audit Log!', 'success');
   };
 
   const handleResetAllReviewedSystem = () => {
     const reviewedKeys = alerts.filter((a) => a.reviewed).map((a) => a.key);
+    const reviewedFga = fgaEvents.filter((f) => f.reviewed).map((f) => getFgaKey(f));
+    const reviewedTrigIds = triggers.filter((t) => t.reviewed).map((t) => t.ALERT_ID);
+    const reviewedAudKeys = auditLogs.filter((r) => r.reviewed).map((r) => getAuditKey(r));
+
+    reviewedKeys.forEach((k) => reviewedKeysRef.current.delete(k));
+    reviewedFga.forEach((k) => {
+      dismissedFgaKeysRef.current.add(k);
+      reviewedFgaKeysRef.current.delete(k);
+    });
+    reviewedTrigIds.forEach((id) => {
+      dismissedTriggerIdsRef.current.add(id);
+      reviewedTriggerIdsRef.current.delete(id);
+    });
+    reviewedAudKeys.forEach((k) => reviewedAuditKeysRef.current.delete(k));
+
     const remainingAlerts = alerts.filter((a) => !a.reviewed);
     const remainingFga = fgaEvents.filter((f) => !f.reviewed);
     const remainingTriggers = triggers.filter((t) => !t.reviewed);
@@ -614,17 +784,30 @@ export default function App() {
       auditCutoffRef.current = nowStr;
     }
 
+    const isEverythingCleared =
+      remainingAlerts.length === 0 &&
+      remainingFga.length === 0 &&
+      remainingTriggers.length === 0 &&
+      remainingAudit.length === 0;
+
     fetch('/api/clear-alerts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(
-        remainingAlerts.length === 0
+        isEverythingCleared
           ? { target: 'all', cutoff: nowStr }
-          : { target: 'reviewed', reviewed_keys: reviewedKeys, cutoff: nowStr }
+          : {
+              target: 'reviewed',
+              reviewed_keys: reviewedKeys,
+              reviewed_fga_keys: reviewedFga,
+              reviewed_trigger_ids: reviewedTrigIds,
+              reviewed_audit_keys: reviewedAudKeys,
+              cutoff: nowStr,
+            }
       ),
     }).catch(() => {});
 
-    addToast('Đã Reset toàn bộ sự kiện & cảnh báo đã kiểm duyệt, đồng thời cập nhật lại điểm rủi ro!', 'success');
+    addToast('Đã xóa vĩnh viễn toàn bộ mục đã kiểm duyệt khỏi bộ nhớ và cập nhật lại điểm rủi ro!', 'success');
   };
 
   // Clear Alerts (Ids / Triggers / All)
@@ -632,6 +815,11 @@ export default function App() {
     const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
     if (target === 'all') {
       auditCutoffRef.current = nowStr;
+      fgaCutoffRef.current = nowStr;
+      fgaEvents.forEach((f) => dismissedFgaKeysRef.current.add(getFgaKey(f)));
+      triggers.forEach((t) => dismissedTriggerIdsRef.current.add(t.ALERT_ID));
+    } else if (target === 'triggers') {
+      triggers.forEach((t) => dismissedTriggerIdsRef.current.add(t.ALERT_ID));
     }
 
     fetch('/api/clear-alerts', {
@@ -679,6 +867,7 @@ export default function App() {
   const handleOpenAlertModal = (alert: AlertItem) => {
     setSelectedAlertKey(alert.key);
     setSelectedAuditRowIndex(null);
+    setCustomModalAuditRow(null);
     setModalOpen(true);
   };
 
@@ -686,6 +875,48 @@ export default function App() {
     const idx = displayAuditLogs.indexOf(row);
     setSelectedAuditRowIndex(idx >= 0 ? idx : 0);
     setSelectedAlertKey(null);
+    setCustomModalAuditRow(null);
+    setModalOpen(true);
+  };
+
+  const handleOpenFgaModal = (fga: FgaEvent) => {
+    setSelectedAlertKey(null);
+    setSelectedAuditRowIndex(null);
+    setCustomModalAuditRow({
+      EVENT_TIMESTAMP: fga.EVENT_TIMESTAMP,
+      DBUSERNAME: fga.DBUSERNAME,
+      ACTION_NAME: fga.ACTION_NAME || 'SELECT',
+      OBJECT_SCHEMA: fga.OBJECT_SCHEMA || 'SYS',
+      OBJECT_NAME: fga.OBJECT_NAME || 'NV',
+      SQL_TEXT: fga.SQL_TEXT,
+      RETURN_CODE: Number(fga.RETURN_CODE || 0),
+      OS_USERNAME: fga.OS_USERNAME,
+      USERHOST: fga.USERHOST,
+      CLIENT_PROGRAM_NAME: fga.CLIENT_PROGRAM_NAME || 'SQL Developer (DBMS_FGA)',
+      AUDIT_TYPE: fga.AUDIT_TYPE || 'FineGrainedAudit',
+      FGA_POLICY_NAME: fga.FGA_POLICY_NAME,
+      reviewed: fga.reviewed,
+    });
+    setModalOpen(true);
+  };
+
+  const handleOpenTriggerModal = (trig: TriggerAlert) => {
+    setSelectedAlertKey(null);
+    setSelectedAuditRowIndex(null);
+    setCustomModalAuditRow({
+      EVENT_TIMESTAMP: trig.EVENT_TIME,
+      DBUSERNAME: trig.DB_USER,
+      ACTION_NAME: trig.ATTACK_TYPE,
+      OBJECT_SCHEMA: 'SYS',
+      OBJECT_NAME: 'NV',
+      SQL_TEXT: trig.DETAILS,
+      RETURN_CODE: trig.ATTACK_TYPE.includes('SALARY') ? 20001 : 20002,
+      OS_USERNAME: 'oracle_session',
+      USERHOST: 'FREEPDB1',
+      CLIENT_PROGRAM_NAME: 'PL/SQL Trigger (PRAGMA AUTONOMOUS_TRANSACTION)',
+      AUDIT_TYPE: 'TriggerAlert',
+      reviewed: trig.reviewed,
+    });
     setModalOpen(true);
   };
 
@@ -698,9 +929,10 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen bg-[#090e17] text-slate-100 flex flex-col font-sans ${
+      data-theme={themeMode}
+      className={`min-h-screen soc-canvas-bg text-slate-100 flex flex-col font-sans ${
         uiDensity === 'compact' ? 'density-compact' : ''
-      }`}
+      } ${themeMode === 'light' ? 'theme-light' : ''}`}
     >
       {/* Collapsible & Responsive Sidebar */}
       <Sidebar
@@ -712,6 +944,7 @@ export default function App() {
         onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
+        onOpenMobile={() => setIsMobileMenuOpen(true)}
       />
 
       {/* Main Container */}
@@ -727,6 +960,7 @@ export default function App() {
           onOpenOracleBridge={() => setOracleBridgeOpen(true)}
           onOpenPdfExport={() => handleOpenPdfModal()}
           isBridgeConnected={isBridgeConnected}
+          lastSyncTime={lastSyncTime}
           privacyMode={privacyMode}
           onTogglePrivacyMode={() => {
             setPrivacyMode((prev) => {
@@ -747,20 +981,33 @@ export default function App() {
           onChangeLayoutWidth={setLayoutWidth}
           uiDensity={uiDensity}
           onChangeUiDensity={setUiDensity}
+          themeMode={themeMode}
+          onToggleThemeMode={() => {
+            setThemeMode((prev) => {
+              const next = prev === 'dark' ? 'light' : 'dark';
+              addToast(
+                next === 'light'
+                  ? 'Đã chuyển sang Chế độ Sáng (Tối ưu hiển thị trên máy chiếu hội đồng bảo vệ)!'
+                  : 'Đã chuyển sang Chế độ Cyber SOC Tactical Dark!',
+                'info'
+              );
+              return next;
+            });
+          }}
         />
 
         <main
-          className={`${
+          className={`soc-main-container ${
             uiDensity === 'compact' ? 'p-3 sm:p-4' : 'p-4 sm:p-6'
-          } pb-12 flex-1 w-full mx-auto transition-all duration-200 ${containerMaxWidthClass}`}
+          } pb-24 md:pb-12 flex-1 w-full mx-auto transition-all duration-200 ${containerMaxWidthClass}`}
         >
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
-              initial={{ opacity: 0, y: 8 }}
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+              exit={shouldReduceMotion ? undefined : { opacity: 0, y: -6 }}
+              transition={{ duration: shouldReduceMotion ? 0 : 0.16, ease: [0.16, 1, 0.3, 1] }}
             >
               {activeTab === 'home' && (
                 <OverviewTab
@@ -779,6 +1026,7 @@ export default function App() {
                   onResetAllAfterAudit={() => handleClearAlerts('all')}
                   onOpenOracleBridge={() => setOracleBridgeOpen(true)}
                   onOpenPdfExport={() => handleOpenPdfModal('full')}
+                  onUserAction={handleUserAction}
                 />
               )}
 
@@ -805,6 +1053,7 @@ export default function App() {
                   onClearSingleFga={handleClearSingleFga}
                   onClearAllFga={handleClearAllFga}
                   onOpenOracleBridge={() => setOracleBridgeOpen(true)}
+                  onOpenFgaModal={handleOpenFgaModal}
                 />
               )}
 
@@ -818,6 +1067,7 @@ export default function App() {
                   onClearAllTriggers={() => handleClearAlerts('triggers')}
                   onOpenOracleBridge={() => setOracleBridgeOpen(true)}
                   onNavigateTab={(tab) => setActiveTab(tab)}
+                  onOpenTriggerModal={handleOpenTriggerModal}
                 />
               )}
 
@@ -871,15 +1121,18 @@ export default function App() {
         </main>
       </div>
 
-      {/* Inspection Modal with Review & Reset buttons */}
+      {/* Inspection Modal with Review, Reset & 1-Click IPS Containment buttons */}
       <AuditModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         alertItem={selectedAlert}
         auditRow={selectedAuditRow}
+        users={users}
+        privacyMode={privacyMode}
         onToggleReviewAlert={handleToggleReviewAlert}
         onResolveAndResetAlert={handleDismissSingleAlert}
         onResetAuditRow={handleResetAuditRowFromModal}
+        onUserAction={handleUserAction}
       />
 
       {/* Oracle SQL Developer Live Sync & Bridge Modal */}

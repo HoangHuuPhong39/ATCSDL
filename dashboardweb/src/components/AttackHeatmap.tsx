@@ -10,7 +10,7 @@ import {
   Cell,
   CartesianGrid,
 } from 'recharts';
-import { Flame, Eye, Database } from 'lucide-react';
+import { Flame, Eye, Database, Info } from 'lucide-react';
 import { AlertItem, DbUser } from '../types/ids';
 import {
   AttackGroup,
@@ -53,8 +53,21 @@ const CustomHeatmapCell: React.FC<CustomHeatmapCellProps> = ({
   return (
     <g
       onClick={() => onSelectCell(payload)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelectCell(payload);
+        }
+      }}
+      tabIndex={isActive ? 0 : -1}
+      role={isActive ? 'button' : undefined}
+      aria-label={
+        isActive
+          ? `User ${payload.user} lúc ${payload.timeSlot}: cường độ ${payload.intensity}/100, ${payload.eventCount} sự kiện`
+          : undefined
+      }
       style={{ cursor: isActive ? 'pointer' : 'default' }}
-      className="transition-opacity hover:opacity-90"
+      className="transition-opacity hover:opacity-90 focus:outline-none"
     >
       <rect
         x={x}
@@ -74,10 +87,10 @@ const CustomHeatmapCell: React.FC<CustomHeatmapCellProps> = ({
             y={cy - 3}
             textAnchor="middle"
             dominantBaseline="central"
-            fill="#ffffff"
+            fill="var(--text-1)"
             fontSize={12}
             fontWeight={700}
-            fontFamily="JetBrains Mono, monospace"
+            fontFamily="IBM Plex Mono, monospace"
           >
             {payload.intensity} pts
           </text>
@@ -86,10 +99,10 @@ const CustomHeatmapCell: React.FC<CustomHeatmapCellProps> = ({
             y={cy + 11}
             textAnchor="middle"
             dominantBaseline="central"
-            fill="#e2e8f0"
-            fontSize={9.5}
+            fill="var(--text-2)"
+            fontSize={11}
             fontWeight={600}
-            fontFamily="JetBrains Mono, monospace"
+            fontFamily="IBM Plex Mono, monospace"
           >
             {payload.eventCount} sự kiện
           </text>
@@ -100,9 +113,9 @@ const CustomHeatmapCell: React.FC<CustomHeatmapCellProps> = ({
           y={cy}
           textAnchor="middle"
           dominantBaseline="central"
-          fill="#475569"
-          fontSize={10.5}
-          fontFamily="JetBrains Mono, monospace"
+          fill="var(--text-3)"
+          fontSize={11}
+          fontFamily="IBM Plex Mono, monospace"
         >
           0
         </text>
@@ -121,9 +134,9 @@ const CustomHeatmapTooltip: React.FC<CustomTooltipProps> = ({ active, payload })
   const cell = payload[0].payload;
 
   return (
-    <div className="bg-[#090e17]/95 border border-sky-400/40 rounded-xl p-3.5 shadow-2xl shadow-black/90 text-[11.5px] max-w-xs space-y-2 backdrop-blur-md">
+    <div className="bg-[var(--surface-subtle)]/95 border border-sky-400/40 rounded-xl p-3.5 shadow-2xl shadow-black/90 text-xs max-w-xs space-y-2 backdrop-blur-md">
       <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-2">
-        <span className="font-mono font-bold text-sky-300 text-[12.5px]">
+        <span className="font-mono font-bold text-sky-300 text-xs">
           User: {cell.user}
         </span>
         <span className="font-mono text-slate-300 tabular-nums">
@@ -152,7 +165,7 @@ const CustomHeatmapTooltip: React.FC<CustomTooltipProps> = ({ active, payload })
         </div>
       </div>
 
-      <div className="pt-1.5 border-t border-white/10 text-[11px] text-slate-300">
+      <div className="pt-1.5 border-t border-white/10 text-xs text-slate-300">
         <span className="text-slate-400 block mb-0.5">Kỹ thuật nổi bật:</span>
         <span className="font-semibold text-sky-200 line-clamp-2">{cell.topAttack}</span>
       </div>
@@ -197,66 +210,67 @@ export const AttackHeatmap: React.FC<AttackHeatmapProps> = ({
   return (
     <section
       data-testid="recharts-attack-heatmap"
-      className="bg-[#101b2e] border border-sky-500/20 rounded-xl p-4 sm:p-5 shadow-lg shadow-black/30"
+      className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-3.5 sm:p-4 transition-colors"
     >
       {/* Header & Group Filter */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-4 border-b border-white/5">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400 shrink-0">
-            <Flame className="w-4 h-4" />
-          </div>
-          <div>
-            <h2 className="text-[13.5px] sm:text-[14px] font-bold text-slate-100">
-              Biểu đồ Nhiệt Cường độ Tấn công theo Thời gian &amp; Tài khoản (Recharts Attack Intensity Heatmap)
-            </h2>
-            <p className="text-[11px] text-slate-400">
-              Trục ngang: Khung thời gian (5 phút) · Trục dọc: Tài khoản CSDL · Nhấn vào ô nhiệt để thanh tra trực tiếp câu lệnh SQL
-            </p>
-          </div>
+      <div className="flex items-center justify-between gap-3 pb-3 border-b border-[var(--line)]">
+        <div className="flex items-center gap-2 min-w-0">
+          <Flame className="w-4 h-4 text-[var(--warn)] shrink-0" />
+          <h2 className="text-xs sm:text-sm font-semibold text-[var(--text-1)] truncate">
+            Biểu đồ nhiệt
+          </h2>
+          <span
+            title="Trục ngang: Khung thời gian (5 phút) · Trục dọc: Tài khoản CSDL · Nhấn vào ô để xem chi tiết"
+            className="text-[var(--text-3)] cursor-help shrink-0"
+          >
+            <Info className="w-3.5 h-3.5" />
+          </span>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap shrink-0">
-          <div className="flex items-center bg-[#0b1322] border border-sky-500/20 rounded-lg p-1 gap-1">
-            <button
-              onClick={() => setGroupFilter('ALL')}
-              className={`px-2.5 py-1 text-[11px] font-semibold rounded cursor-pointer transition-colors whitespace-nowrap ${
-                groupFilter === 'ALL'
-                  ? 'bg-sky-600 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Tất cả Vectơ
-            </button>
-            <button
-              onClick={() => setGroupFilter('DBMS')}
-              className={`px-2.5 py-1 text-[11px] font-semibold rounded cursor-pointer transition-colors whitespace-nowrap ${
-                groupFilter === 'DBMS'
-                  ? 'bg-red-600 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Kỹ thuật DBMS
-            </button>
-            <button
-              onClick={() => setGroupFilter('SDB')}
-              className={`px-2.5 py-1 text-[11px] font-semibold rounded cursor-pointer transition-colors whitespace-nowrap ${
-                groupFilter === 'SDB'
-                  ? 'bg-amber-600 text-white'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Suy diễn SDB
-            </button>
-          </div>
+        <div className="flex items-center bg-[var(--surface-hover)] border border-[var(--line)] rounded-lg p-0.5 gap-0.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => setGroupFilter('ALL')}
+            className={`px-2 py-1 text-xs font-medium rounded transition-colors cursor-pointer whitespace-nowrap focus-visible:ring ${
+              groupFilter === 'ALL'
+                ? 'bg-[var(--surface)] text-[var(--text-1)] shadow-sm'
+                : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
+            }`}
+          >
+            Tất cả
+          </button>
+          <button
+            type="button"
+            onClick={() => setGroupFilter('DBMS')}
+            className={`px-2 py-1 text-xs font-medium rounded transition-colors cursor-pointer whitespace-nowrap focus-visible:ring ${
+              groupFilter === 'DBMS'
+                ? 'bg-[var(--surface)] text-[var(--danger)] shadow-sm'
+                : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
+            }`}
+          >
+            DBMS
+          </button>
+          <button
+            type="button"
+            onClick={() => setGroupFilter('SDB')}
+            className={`px-2 py-1 text-xs font-medium rounded transition-colors cursor-pointer whitespace-nowrap focus-visible:ring ${
+              groupFilter === 'SDB'
+                ? 'bg-[var(--surface)] text-[var(--warn)] shadow-sm'
+                : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
+            }`}
+          >
+            SDB
+          </button>
         </div>
       </div>
 
       {/* Recharts 2D Scatter Matrix Heatmap */}
-      <div className="mt-4 w-full h-[270px] bg-[#0b1322]/70 border border-white/5 rounded-xl p-2 sm:p-3">
-        <ResponsiveContainer width="100%" height="100%">
-          <ScatterChart
-            margin={{ top: 18, right: 28, bottom: 16, left: 10 }}
-          >
+      <div className="mt-4 w-full bg-[var(--surface-subtle)]/70 border border-white/5 rounded-xl p-2 sm:p-3 overflow-x-auto">
+        <div className="min-w-[520px] h-[270px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <ScatterChart
+              margin={{ top: 18, right: 28, bottom: 16, left: 10 }}
+            >
             <CartesianGrid
               strokeDasharray="3 3"
               stroke="rgba(148, 163, 184, 0.08)"
@@ -270,7 +284,7 @@ export const AttackHeatmap: React.FC<AttackHeatmapProps> = ({
               domain={[-0.5, Math.max(0.5, matrix.timeSlots.length - 0.5)]}
               ticks={matrix.timeSlots.map((_, idx) => idx)}
               tickFormatter={(idx: number) => matrix.timeSlots[idx] || ''}
-              tick={{ fill: '#94a3b8', fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}
+              tick={{ fill: 'var(--text-3)', fontSize: 11, fontFamily: 'IBM Plex Mono, monospace' }}
               axisLine={{ stroke: 'rgba(56, 189, 248, 0.2)' }}
               tickLine={false}
               interval={0}
@@ -282,7 +296,7 @@ export const AttackHeatmap: React.FC<AttackHeatmapProps> = ({
               domain={[-0.6, Math.max(0.6, matrix.users.length - 0.4)]}
               ticks={matrix.users.map((_, idx) => idx)}
               tickFormatter={(idx: number) => matrix.users[idx] || ''}
-              tick={{ fill: '#38bdf8', fontSize: 12, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace' }}
+              tick={{ fill: 'var(--accent)', fontSize: 12, fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace' }}
               axisLine={{ stroke: 'rgba(56, 189, 248, 0.2)' }}
               tickLine={false}
               width={56}
@@ -323,56 +337,59 @@ export const AttackHeatmap: React.FC<AttackHeatmapProps> = ({
             </Scatter>
           </ScatterChart>
         </ResponsiveContainer>
+        </div>
       </div>
 
       {/* Bottom Legend & Peak Cell Inspector */}
-      <div className="mt-3.5 pt-3 border-t border-white/5 flex flex-col xl:flex-row xl:items-center justify-between gap-3 text-[11.5px]">
+      <div className="mt-3 pt-3 border-t border-[var(--line)] flex flex-col xl:flex-row xl:items-center justify-between gap-3 text-xs">
         {/* Intensity Scale Legend */}
-        <div className="flex items-center gap-4 flex-wrap text-slate-300">
-          <span className="text-slate-400 font-semibold">Thang nhiệt độ rủi ro:</span>
+        <div className="flex items-center gap-3.5 flex-wrap text-[var(--text-3)] font-mono">
+          <span className="font-sans font-medium text-[var(--text-2)]">Thang nhiệt:</span>
           <div className="flex items-center gap-1.5">
-            <span className="w-3.5 h-3.5 rounded bg-[#0b1322] border border-sky-500/25 inline-block" />
-            <span className="font-mono text-[11px]">0 (An toàn)</span>
+            <span className="w-2.5 h-2.5 rounded bg-[var(--surface-hover)] border border-[var(--line)] inline-block" />
+            <span className="text-xs">0 (An toàn)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3.5 h-3.5 rounded bg-sky-500/70 border border-sky-400 inline-block" />
-            <span className="font-mono text-[11px]">1–49 (L1 Warning)</span>
+            <span className="w-2.5 h-2.5 rounded bg-[var(--accent)]/40 inline-block" />
+            <span className="text-xs">1–49 (L1)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3.5 h-3.5 rounded bg-orange-500/80 border border-orange-400 inline-block" />
-            <span className="font-mono text-[11px]">50–79 (L2 Read-Only)</span>
+            <span className="w-2.5 h-2.5 rounded bg-[var(--warn)]/70 inline-block" />
+            <span className="text-xs">50–79 (L2)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="w-3.5 h-3.5 rounded bg-red-500/85 border border-red-400 inline-block" />
-            <span className="font-mono text-[11px]">80–100 (L3 Lock &amp; Kill)</span>
+            <span className="w-2.5 h-2.5 rounded bg-[var(--danger)]/80 inline-block" />
+            <span className="text-xs">80–100 (L3)</span>
           </div>
         </div>
 
         {/* Selected / Peak Cell Quick Action */}
         {activeInspectionCell && activeInspectionCell.intensity > 0 ? (
-          <div className="flex items-center justify-between sm:justify-end gap-3 bg-[#0b1322] border border-white/5 px-3 py-1.5 rounded-lg">
-            <div className="text-[11px] font-mono text-slate-300 truncate max-w-md">
-              Điểm nóng: <strong className="text-sky-300">{activeInspectionCell.user}</strong> lúc{' '}
-              <span className="text-slate-200 tabular-nums">{activeInspectionCell.timeSlot}</span> ·{' '}
-              <strong className="text-red-400 tabular-nums">{activeInspectionCell.intensity}/100 pts</strong> ({activeInspectionCell.topAttack})
+          <div className="flex items-center justify-between sm:justify-end gap-2.5 bg-[var(--surface-hover)] border border-[var(--line)] px-2.5 py-1 rounded-lg">
+            <div className="text-xs font-mono text-[var(--text-2)] truncate max-w-md">
+              Điểm nóng: <strong className="text-[var(--text-1)]">{activeInspectionCell.user}</strong> lúc{' '}
+              <span className="tabular-nums">{activeInspectionCell.timeSlot}</span> ·{' '}
+              <strong className="text-[var(--danger)] tabular-nums">{activeInspectionCell.intensity}/100</strong>
             </div>
             {activeInspectionCell.sampleAlert && (
               <button
+                type="button"
                 onClick={() => onOpenAlertModal(activeInspectionCell.sampleAlert!)}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[#131e33] border border-sky-500/25 text-sky-300 hover:text-white text-[11px] font-semibold transition-colors cursor-pointer shrink-0"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] text-[var(--accent)] hover:text-[var(--text-1)] text-xs font-medium transition-colors cursor-pointer shrink-0 focus-visible:ring"
               >
                 <Eye className="w-3 h-3" />
-                <span>Xem SQL</span>
+                <span>Chi tiết</span>
               </button>
             )}
           </div>
         ) : (
           <button
+            type="button"
             onClick={onOpenOracleBridge}
-            className="inline-flex items-center gap-1.5 text-sky-300 hover:text-white font-semibold text-[11.5px] cursor-pointer self-start xl:self-auto"
+            className="inline-flex items-center gap-1.5 text-[var(--text-3)] hover:text-[var(--text-1)] text-xs transition-colors cursor-pointer self-start xl:self-auto focus-visible:ring"
           >
-            <Database className="w-3.5 h-3.5" />
-            <span>Đang lắng nghe sự kiện mới từ Oracle SQL Developer</span>
+            <Database className="w-3.5 h-3.5 text-[var(--ok)]" />
+            <span>Oracle Bridge kết nối trực tiếp FREEPDB1</span>
           </button>
         )}
       </div>

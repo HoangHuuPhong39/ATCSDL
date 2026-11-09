@@ -10,7 +10,7 @@ start "Web Dashboard (React + Express)" cmd /k "cd /d ""%~dp0dashboardweb"" && n
 timeout /t 3 > nul
 
 echo [2/2] Dang khoi dong Oracle Live Sync Bridge...
-start "Oracle Live Sync Bridge" cmd /k "cd /d ""%~dp0oracle"" && python bridge.py"
+start "Oracle Live Sync Bridge" cmd /k "cd /d ""%~dp0oracle"" && set NO_BROWSER=1 && python bridge.py"
 
 echo.
 echo ====================================================================

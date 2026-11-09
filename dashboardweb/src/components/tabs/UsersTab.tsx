@@ -8,7 +8,7 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { DbUser, Employee, ActiveTab } from '../../types/ids';
-import { maskUsername, maskHost, maskOsUser, maskCmnd } from '../../utils/privacy';
+import { maskUsername, maskHost, maskOsUser, maskCmnd, maskEmployeeName, maskSalary } from '../../utils/privacy';
 
 interface UsersTabProps {
   users: DbUser[];
@@ -47,6 +47,14 @@ const BASELINE_PROFILES: Record<
   },
 };
 
+const VI_NAME_MAP: Record<string, string> = {
+  'Nguyen Van A': 'Nguyễn Văn A',
+  'Tran Thi B': 'Trần Thị B',
+  'Le Van C': 'Lê Văn C',
+  'Pham Thi D': 'Phạm Thị D',
+  'Hoang Van Sếp (VIP)': 'Hoàng Văn Sếp (VIP)',
+};
+
 export const UsersTab: React.FC<UsersTabProps> = ({
   users,
   employees,
@@ -54,81 +62,77 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   onNavigateTab,
 }) => {
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* 1. Sensitive Employees Table (SYS.NV) & Honeytoken Trap */}
-      <section className="bg-[#101b2e] border border-sky-500/20 rounded-xl shadow-lg shadow-black/30 overflow-hidden">
-        <div className="p-3.5 px-4.5 border-b border-white/5 bg-[#0e1626]/60 flex items-center justify-between flex-wrap gap-2.5">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-              <Table className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-[13.5px] font-bold text-slate-100">
-                Dữ liệu Bảng Nhạy cảm SYS.NV &amp; Bản ghi Bẫy Honeytoken (NV_TRAP)
-              </div>
-              <div className="text-[11px] text-slate-400">
-                Bảo vệ đa tầng: Trigger TRG_PROTECT_NV + FGA_HONEYTOKEN_TRAP + FGA_HIGH_SALARY_ACCESS
-              </div>
-            </div>
+      <section className="bg-[var(--surface)] border border-[var(--line)] rounded-xl overflow-hidden transition-colors">
+        <div className="p-3.5 px-4 border-b border-[var(--line)] flex items-center justify-between flex-wrap gap-2.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <Table className="w-4 h-4 text-[var(--ok)] shrink-0" />
+            <h2 className="text-sm font-semibold text-[var(--text-1)] truncate">
+              Dữ liệu bảng SYS.NV
+            </h2>
           </div>
           <div className="flex items-center gap-2.5">
             {privacyMode && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-500/15 border border-purple-500/35 text-purple-300 text-[10.5px] font-mono">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--accent)] text-xs font-mono">
                 <EyeOff className="w-3 h-3" />
-                Đã ẩn CMND &amp; Định danh
+                <span>Đã ẩn PII &amp; Lương</span>
               </span>
             )}
-            <span className="text-[11px] font-mono text-slate-400 tabular-nums">
-              Số bản ghi: <strong className="text-emerald-400">{employees.length}</strong> (4 NV thực + 1 Honeytoken)
+            <span className="text-xs font-mono text-[var(--text-3)] tabular-nums">
+              Tổng số: <strong className="text-[var(--text-1)]">{employees.length}</strong> ({employees.filter((e) => e.MANV !== 'NV_TRAP').length} NV + {employees.filter((e) => e.MANV === 'NV_TRAP').length} Trap)
             </span>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-[12px]">
+          <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-sky-500/15 bg-[#0b1322] text-slate-400 uppercase text-[10.5px] font-bold tracking-wider">
+              <tr className="border-b border-[var(--line)] bg-[var(--surface-subtle)] text-[var(--text-3)] uppercase text-xs font-semibold tracking-wider sticky top-0 z-10">
                 <th className="py-2.5 px-3.5">Mã NV</th>
-                <th className="py-2.5 px-3.5">Phân loại Bản ghi</th>
+                <th className="py-2.5 px-3.5">Phân loại</th>
                 <th className="py-2.5 px-3.5">Họ và Tên</th>
-                <th className="py-2.5 px-3.5">Lương ($x_i$)</th>
+                <th className="py-2.5 px-3.5">Lương</th>
                 <th className="py-2.5 px-3.5">Giới tính</th>
-                <th className="py-2.5 px-3.5">CMND / CCCD (TDE / DBMS_CRYPTO)</th>
+                <th className="py-2.5 px-3.5">CMND / CCCD</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-[var(--line)]">
               {employees.map((r) => {
                 const isTrap = r.MANV.toUpperCase() === 'NV_TRAP';
+                const displayName = VI_NAME_MAP[r.HOTEN] || r.HOTEN;
+                const displayGender = r.GIOITINH === 'Nu' ? 'Nữ' : r.GIOITINH;
+
                 return (
                   <tr
                     key={r.MANV}
-                    className={`hover:bg-white/5 transition-colors ${
-                      isTrap ? 'honeytoken-row' : ''
+                    className={`hover:bg-[var(--surface-hover)] transition-colors ${
+                      isTrap ? 'bg-[var(--danger-soft)]/20' : ''
                     }`}
                   >
-                    <td className="py-3 px-3.5 font-bold font-mono text-sky-300">{r.MANV}</td>
-                    <td className="py-3 px-3.5">
+                    <td className="py-2.5 px-3.5 font-semibold font-mono text-[var(--accent)]">{r.MANV}</td>
+                    <td className="py-2.5 px-3.5">
                       {isTrap ? (
-                        <span className="inline-flex items-center gap-1.5 text-[11px] font-bold font-mono text-red-300">
-                          <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
-                          <span>HONEYTOKEN CANARY TRAP</span>
+                        <span className="inline-flex items-center gap-1.5 text-xs font-semibold font-mono text-[var(--danger)]">
+                          <AlertTriangle className="w-3.5 h-3.5 text-[var(--danger)]" />
+                          <span>HONEYTOKEN TRAP</span>
                         </span>
                       ) : (
-                        <span className="text-[11.5px] text-slate-300">
-                          Bản ghi Nghiệp vụ
-                        </span>
+                        <span className="text-xs text-[var(--text-3)]">Bản ghi nghiệp vụ</span>
                       )}
                     </td>
-                    <td className="py-3 px-3.5 font-bold text-slate-200">{r.HOTEN}</td>
+                    <td className="py-2.5 px-3.5 font-medium text-[var(--text-1)]">
+                      {maskEmployeeName(displayName, privacyMode)}
+                    </td>
                     <td
-                      className={`py-3 px-3.5 font-mono font-bold text-[13px] tabular-nums ${
-                        isTrap ? 'text-red-400' : 'text-emerald-400'
+                      className={`py-2.5 px-3.5 font-mono font-semibold tabular-nums ${
+                        isTrap ? 'text-[var(--danger)]' : 'text-[var(--ok)]'
                       }`}
                     >
-                      {r.LUONG.toLocaleString()}
+                      {maskSalary(r.LUONG, privacyMode)}
                     </td>
-                    <td className="py-3 px-3.5 text-slate-300">{r.GIOITINH}</td>
-                    <td className="py-3 px-3.5 font-mono text-slate-400 tabular-nums">
+                    <td className="py-2.5 px-3.5 text-[var(--text-2)]">{displayGender}</td>
+                    <td className="py-2.5 px-3.5 font-mono text-[var(--text-3)] tabular-nums">
                       {maskCmnd(r.CMND, privacyMode)}
                     </td>
                   </tr>
@@ -140,48 +144,41 @@ export const UsersTab: React.FC<UsersTabProps> = ({
       </section>
 
       {/* 2. Database User Baseline Profiles & Object Privileges */}
-      <section className="bg-[#101b2e] border border-sky-500/20 rounded-xl shadow-lg shadow-black/30 overflow-hidden">
-        <div className="p-3.5 px-4.5 border-b border-white/5 bg-[#0e1626]/60 flex items-center justify-between flex-wrap gap-2.5">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
-              <Fingerprint className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-[13.5px] font-bold text-slate-100">
-                Hồ sơ Định danh Chuẩn (Baseline Profile) &amp; Phân quyền Đối tượng (DBA_TAB_PRIVS)
-              </div>
-              <div className="text-[11px] text-slate-400">
-                Mật khẩu xác thực được băm một chiều (SHA-512 Salt) trong <code className="text-sky-300 font-mono">SYS.USER$</code> và ẩn hoàn toàn khỏi giao diện giám sát
-              </div>
-            </div>
+      <section className="bg-[var(--surface)] border border-[var(--line)] rounded-xl overflow-hidden transition-colors">
+        <div className="p-3.5 px-4 border-b border-[var(--line)] flex items-center justify-between flex-wrap gap-2.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <Fingerprint className="w-4 h-4 text-[var(--accent)] shrink-0" />
+            <h2 className="text-sm font-semibold text-[var(--text-1)] truncate">
+              Hồ sơ định danh &amp; Phân quyền
+            </h2>
           </div>
 
           {onNavigateTab && (
             <button
               onClick={() => onNavigateTab('ips')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#131e33] border border-sky-500/25 text-sky-300 hover:text-white hover:border-sky-400 text-[11.5px] font-semibold transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[var(--accent)] hover:underline cursor-pointer focus-visible:ring"
             >
               <Users className="w-3.5 h-3.5" />
-              <span>Điều khiển Khóa / Hạ quyền tại tab IPS</span>
+              <span>Quản trị quyền tại IPS</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-[12px]">
+          <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-sky-500/15 bg-[#0b1322] text-slate-400 uppercase text-[10.5px] font-bold tracking-wider">
+              <tr className="border-b border-[var(--line)] bg-[var(--surface-subtle)] text-[var(--text-3)] uppercase text-xs font-semibold tracking-wider sticky top-0 z-10">
                 <th className="py-2.5 px-3.5">DB User</th>
-                <th className="py-2.5 px-3.5">Mật khẩu (SYS.USER$)</th>
-                <th className="py-2.5 px-3.5">Vai trò Nghiệp vụ</th>
-                <th className="py-2.5 px-3.5">Host Chuẩn (Trusted Host)</th>
-                <th className="py-2.5 px-3.5">OS User &amp; Client Chuẩn</th>
-                <th className="py-2.5 px-3.5">Quyền hiện hành trên SYS.NV</th>
-                <th className="py-2.5 px-3.5">Trạng thái &amp; Thời điểm khóa</th>
+                <th className="py-2.5 px-3.5">Mật khẩu</th>
+                <th className="py-2.5 px-3.5">Vai trò</th>
+                <th className="py-2.5 px-3.5">Trusted Host</th>
+                <th className="py-2.5 px-3.5">OS User &amp; Client</th>
+                <th className="py-2.5 px-3.5">Quyền SYS.NV</th>
+                <th className="py-2.5 px-3.5">Trạng thái</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-[var(--line)]">
               {users.map((u) => {
                 const profile = BASELINE_PROFILES[u.USERNAME] || {
                   role: 'Database User',
@@ -191,29 +188,29 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                 };
                 const isLocked = u.ACCOUNT_STATUS.toUpperCase().includes('LOCK');
                 return (
-                  <tr key={u.USERNAME} className="hover:bg-sky-500/5 transition-colors">
-                    <td className="py-3 px-3.5 font-bold font-mono text-sky-300 text-[13px]">
+                  <tr key={u.USERNAME} className="hover:bg-[var(--surface-hover)] transition-colors">
+                    <td className="py-2.5 px-3.5 font-semibold font-mono text-[var(--accent)]">
                       {maskUsername(u.USERNAME, privacyMode)}
                     </td>
-                    <td className="py-3 px-3.5 font-mono text-slate-500 text-[11.5px]">
+                    <td className="py-2.5 px-3.5 font-mono text-[var(--text-3)] whitespace-nowrap">
                       •••••••• (SHA-512)
                     </td>
-                    <td className="py-3 px-3.5 text-slate-200 font-medium">{profile.role}</td>
-                    <td className="py-3 px-3.5 font-mono text-slate-300 text-[11.5px]">
+                    <td className="py-2.5 px-3.5 text-[var(--text-2)] font-medium">{profile.role}</td>
+                    <td className="py-2.5 px-3.5 font-mono text-[var(--text-2)]">
                       {maskHost(profile.trustedHost, privacyMode)}
                     </td>
-                    <td className="py-3 px-3.5 font-mono text-slate-400 text-[11.5px]">
+                    <td className="py-2.5 px-3.5 font-mono text-[var(--text-3)]">
                       {maskOsUser(profile.trustedOsUser, privacyMode)} · {profile.trustedClient}
                     </td>
-                    <td className="py-3 px-3.5 font-mono text-[11.5px] text-emerald-300">
+                    <td className="py-2.5 px-3.5 font-mono text-[var(--ok)]">
                       {u.PRIVILEGES} ({u.DML_STATUS})
                     </td>
-                    <td className="py-3 px-3.5 font-mono text-[11.5px] tabular-nums">
-                      <span className={isLocked ? 'text-red-400 font-bold' : 'text-emerald-400 font-semibold'}>
+                    <td className="py-2.5 px-3.5 font-mono tabular-nums">
+                      <span className={isLocked ? 'text-[var(--danger)] font-semibold' : 'text-[var(--ok)] font-medium'}>
                         {u.ACCOUNT_STATUS}
                       </span>
                       {u.LOCK_DATE && (
-                        <span className="text-slate-400 ml-1.5">({u.LOCK_DATE})</span>
+                        <span className="text-[var(--text-3)] ml-1.5 text-xs">({u.LOCK_DATE})</span>
                       )}
                     </td>
                   </tr>

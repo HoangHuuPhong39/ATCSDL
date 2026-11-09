@@ -1,14 +1,16 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Target,
-  ShieldAlert,
   CheckCircle2,
   CheckCheck,
-  RotateCcw,
   Trash2,
-  Terminal,
+  Eye,
+  Code,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { FgaEvent } from '../../types/ids';
+import { maskUsername } from '../../utils/privacy';
 
 interface FgaTabProps {
   fgaEvents: FgaEvent[];
@@ -18,6 +20,7 @@ interface FgaTabProps {
   onClearSingleFga: (index: number) => void;
   onClearAllFga: () => void;
   onOpenOracleBridge?: () => void;
+  onOpenFgaModal?: (event: FgaEvent) => void;
 }
 
 export const FgaTab: React.FC<FgaTabProps> = ({
@@ -27,225 +30,243 @@ export const FgaTab: React.FC<FgaTabProps> = ({
   onResetReviewedFga,
   onClearSingleFga,
   onClearAllFga,
-  onOpenOracleBridge,
+  onOpenFgaModal,
 }) => {
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const [showCode1, setShowCode1] = useState(false);
+  const [showCode2, setShowCode2] = useState(false);
+
   const reviewedCount = useMemo(() => fgaEvents.filter((e) => e.reviewed).length, [fgaEvents]);
   const pendingCount = fgaEvents.length - reviewedCount;
 
   return (
-    <div className="space-y-5">
-      {/* Policy Concept Cards */}
+    <div className="space-y-4">
+      {/* Policy Concept Cards (1-line description + Collapsible Code block) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Policy 1: Honeytoken Trap */}
-        <div className="bg-[#101b2e] border border-red-500/30 rounded-xl p-4 shadow-lg shadow-black/30 relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-400 animate-pulse" />
-              <h3 className="font-bold text-slate-100 text-[13.5px]">Policy: FGA_HONEYTOKEN_TRAP</h3>
+        <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-3.5 transition-colors">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-[var(--danger)] shrink-0" />
+              <h3 className="font-semibold text-[var(--text-1)] text-xs truncate">
+                FGA_HONEYTOKEN_TRAP
+              </h3>
             </div>
-            <span className="px-2 py-0.5 rounded text-[10.5px] font-bold font-mono bg-red-500/20 text-red-300 border border-red-500/40">
-              TRAP / CANARY
-            </span>
+            <button
+              type="button"
+              onClick={() => setShowCode1((prev) => !prev)}
+              className="inline-flex items-center gap-1 text-xs text-[var(--text-3)] hover:text-[var(--text-1)] cursor-pointer focus-visible:ring"
+            >
+              <Code className="w-3 h-3" />
+              <span>{showCode1 ? 'Ẩn mã' : 'Xem mã'}</span>
+              {showCode1 ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
           </div>
-          <p className="text-[12px] text-slate-300 mt-2 leading-relaxed">
-            Bẫy dữ liệu mồi nhử (Canary Token) gài vào bảng <code className="text-sky-300 font-mono">SYS.NV</code> với mã nhân viên{' '}
-            <code className="text-red-300 font-mono font-bold">MANV = &apos;NV_TRAP&apos;</code> (Lương 99,999). Mọi truy vấn đọc hoặc sửa đổi bản ghi này đều là hành vi xâm nhập ác ý (Zero False Positive).
+          <p className="text-xs text-[var(--text-3)] mt-1.5 truncate">
+            Bẫy Canary Token trên bản ghi <code className="text-[var(--danger)] font-mono font-semibold">MANV = &apos;NV_TRAP&apos;</code> (Lương 99,999) — Zero False Positive.
           </p>
-          <div className="mt-3 bg-[#080d17] p-2.5 rounded-lg border border-white/5 font-mono text-[11px] text-purple-300">
-            DBMS_FGA.ADD_POLICY(object_name=&gt;&apos;NV&apos;, policy_name=&gt;&apos;FGA_HONEYTOKEN_TRAP&apos;, audit_condition=&gt;&apos;manv=&apos;&apos;NV_TRAP&apos;&apos;&apos;);
-          </div>
+          {showCode1 && (
+            <div className="mt-2.5 bg-[var(--surface-hover)] p-2 rounded-lg border border-[var(--line)] font-mono text-xs text-[var(--accent)] break-all select-all">
+              DBMS_FGA.ADD_POLICY(object_name=&gt;&apos;NV&apos;, policy_name=&gt;&apos;FGA_HONEYTOKEN_TRAP&apos;, audit_condition=&gt;&apos;manv=&apos;&apos;NV_TRAP&apos;&apos;&apos;);
+            </div>
+          )}
         </div>
 
         {/* Policy 2: High Salary Access */}
-        <div className="bg-[#101b2e] border border-purple-500/30 rounded-xl p-4 shadow-lg shadow-black/30 relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-purple-400" />
-              <h3 className="font-bold text-slate-100 text-[13.5px]">Policy: FGA_HIGH_SALARY_ACCESS</h3>
+        <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-3.5 transition-colors">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-[var(--accent)] shrink-0" />
+              <h3 className="font-semibold text-[var(--text-1)] text-xs truncate">
+                FGA_HIGH_SALARY_ACCESS
+              </h3>
             </div>
-            <span className="px-2 py-0.5 rounded text-[10.5px] font-bold font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40">
-              SENSITIVE DATA
-            </span>
+            <button
+              type="button"
+              onClick={() => setShowCode2((prev) => !prev)}
+              className="inline-flex items-center gap-1 text-xs text-[var(--text-3)] hover:text-[var(--text-1)] cursor-pointer focus-visible:ring"
+            >
+              <Code className="w-3 h-3" />
+              <span>{showCode2 ? 'Ẩn mã' : 'Xem mã'}</span>
+              {showCode2 ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
           </div>
-          <p className="text-[12px] text-slate-300 mt-2 leading-relaxed">
-            Giám sát mịn các truy vấn vào cột thông tin nhạy cảm <code className="text-sky-300 font-mono">LUONG, CMND</code> khi thỏa mãn điều kiện mức lương{' '}
-            <code className="text-purple-300 font-mono font-bold">LUONG &gt;= 1000</code>. Hỗ trợ phát hiện rò rỉ dữ liệu lương lãnh đạo và tấn công suy diễn thống kê.
+          <p className="text-xs text-[var(--text-3)] mt-1.5 truncate">
+            Giám sát truy vấn cột nhạy cảm <code className="text-[var(--accent)] font-mono">LUONG, CMND</code> khi <code className="text-[var(--accent)] font-mono font-semibold">LUONG &gt;= 1000</code>.
           </p>
-          <div className="mt-3 bg-[#080d17] p-2.5 rounded-lg border border-white/5 font-mono text-[11px] text-purple-300">
-            DBMS_FGA.ADD_POLICY(object_name=&gt;&apos;NV&apos;, policy_name=&gt;&apos;FGA_HIGH_SALARY_ACCESS&apos;, audit_condition=&gt;&apos;luong&gt;=1000&apos;, audit_column=&gt;&apos;LUONG, CMND&apos;);
-          </div>
+          {showCode2 && (
+            <div className="mt-2.5 bg-[var(--surface-hover)] p-2 rounded-lg border border-[var(--line)] font-mono text-xs text-[var(--accent)] break-all select-all">
+              DBMS_FGA.ADD_POLICY(object_name=&gt;&apos;NV&apos;, policy_name=&gt;&apos;FGA_HIGH_SALARY_ACCESS&apos;, audit_condition=&gt;&apos;luong&gt;=1000&apos;, audit_column=&gt;&apos;LUONG, CMND&apos;);
+            </div>
+          )}
         </div>
       </div>
 
       {/* Main FGA Events Table */}
-      <section className="bg-[#101b2e] border border-purple-500/20 rounded-xl shadow-lg shadow-black/30 overflow-hidden">
-        <div className="p-3.5 px-4.5 border-b border-white/5 bg-[#0e1626]/60 flex items-center justify-between flex-wrap gap-2.5">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
-              <Target className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-[13.5px] font-bold text-slate-100">
-                Nhật ký Sự kiện Kiểm toán Mịn (DBMS_FGA &amp; Honeytoken Traps)
-              </div>
-              <div className="text-[11px] text-slate-400">
-                Tổng sự kiện: <strong className="text-purple-300 font-mono">{fgaEvents.length}</strong> · Đã kiểm duyệt:{' '}
-                <strong className="text-emerald-400 font-mono">{reviewedCount}</strong>
-              </div>
-            </div>
+      <section className="bg-[var(--surface)] border border-[var(--line)] rounded-xl overflow-hidden transition-colors">
+        {/* Header Toolbar */}
+        <div className="p-3 px-4 border-b border-[var(--line)] flex items-center justify-between flex-wrap gap-2.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <Target className="w-4 h-4 text-[var(--accent)] shrink-0" />
+            <h2 className="text-sm font-semibold text-[var(--text-1)] truncate">
+              Nhật ký bẫy FGA ({fgaEvents.length})
+            </h2>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Action buttons (Ghost + Trash icon) */}
+          <div className="flex items-center gap-1.5 shrink-0">
             {fgaEvents.length > 0 && pendingCount > 0 && (
               <button
+                type="button"
                 onClick={onMarkAllFgaReviewed}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 text-[11.5px] font-semibold transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--ok-soft)] border border-[var(--ok)]/30 text-[var(--ok)] hover:bg-[var(--ok-soft)]/80 text-xs font-medium transition-colors cursor-pointer focus-visible:ring"
+                title="Đánh dấu tất cả sự kiện FGA đã duyệt"
               >
                 <CheckCheck className="w-3.5 h-3.5" />
-                <span>Duyệt tất cả ({pendingCount})</span>
+                <span>Duyệt ({pendingCount})</span>
               </button>
             )}
 
             {reviewedCount > 0 && (
               <button
+                type="button"
                 onClick={onResetReviewedFga}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/45 text-amber-200 hover:bg-amber-500/30 text-[11.5px] font-bold transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--line)] hover:border-[var(--danger)] text-[var(--text-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] text-xs font-medium transition-colors cursor-pointer focus-visible:ring"
+                title="Reset các sự kiện đã kiểm duyệt"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
+                <Trash2 className="w-3.5 h-3.5" />
                 <span>Reset đã duyệt ({reviewedCount})</span>
               </button>
             )}
 
-            {fgaEvents.length > 0 ? (
-              <button
-                onClick={onClearAllFga}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-transparent border border-purple-500/35 text-purple-300 hover:bg-purple-500/15 text-[11.5px] font-semibold transition-all cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Reset sự kiện FGA</span>
-              </button>
-            ) : (
-              onOpenOracleBridge && (
+            {fgaEvents.length > 0 && (
+              confirmClearAll ? (
+                <div className="inline-flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClearAllFga();
+                      setConfirmClearAll(false);
+                    }}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[var(--danger)] text-white text-xs font-medium cursor-pointer transition-colors focus-visible:ring"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Xác nhận xóa?</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmClearAll(false)}
+                    className="px-2 py-1.5 rounded-lg bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--text-2)] text-xs cursor-pointer focus-visible:ring"
+                  >
+                    Hủy
+                  </button>
+                </div>
+              ) : (
                 <button
-                  onClick={onOpenOracleBridge}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 text-[11.5px] font-semibold transition-all cursor-pointer"
+                  type="button"
+                  onClick={() => setConfirmClearAll(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--line)] hover:border-[var(--danger)] text-[var(--text-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] text-xs font-medium transition-colors cursor-pointer focus-visible:ring"
+                  title="Xóa toàn bộ sự kiện FGA"
                 >
-                  <Terminal className="w-3.5 h-3.5" />
-                  <span>Kết nối Oracle SQL Developer</span>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Xóa hết</span>
                 </button>
               )
             )}
           </div>
         </div>
 
-        <div className="overflow-x-auto max-h-[500px]">
+        <div className="overflow-x-auto">
           {fgaEvents.length === 0 ? (
-            <div className="p-10 text-center text-slate-400 flex flex-col items-center gap-3">
-              <CheckCircle2 className="w-9 h-9 text-emerald-400" />
-              <div className="text-[12.5px] text-slate-200 font-semibold">
-                Các sự kiện FGA_HONEYTOKEN_TRAP và FGA_HIGH_SALARY_ACCESS đã được kiểm duyệt và Reset sạch sẽ.
-              </div>
-              {onOpenOracleBridge && (
-                <button
-                  onClick={onOpenOracleBridge}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 text-[12px] font-semibold transition-all cursor-pointer"
-                >
-                  <Terminal className="w-3.5 h-3.5" />
-                  <span>Thực thi SQL từ Oracle SQL Developer</span>
-                </button>
-              )}
+            <div className="py-12 text-center text-[var(--text-3)] flex flex-col items-center gap-2 text-xs">
+              <CheckCircle2 className="w-8 h-8 text-[var(--ok)]" />
+              <span>Chưa có sự kiện bẫy FGA nào được kích hoạt.</span>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse text-[12px]">
+            <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-purple-500/15 bg-[#0b1322] text-slate-400 uppercase text-[10.5px] font-bold tracking-wider sticky top-0 z-10">
-                  <th className="py-2.5 px-3.5">Trạng thái</th>
-                  <th className="py-2.5 px-3.5">Thời gian</th>
-                  <th className="py-2.5 px-3.5">User</th>
-                  <th className="py-2.5 px-3.5">Chính sách FGA</th>
-                  <th className="py-2.5 px-3.5">Ngữ cảnh (Client / Host)</th>
-                  <th className="py-2.5 px-3.5">Câu lệnh kích hoạt (SQL_TEXT)</th>
-                  <th className="py-2.5 px-3.5">Mã trả về</th>
-                  <th className="py-2.5 px-3.5 text-right">Kiểm duyệt &amp; Reset</th>
+                <tr className="border-b border-[var(--line)] bg-[var(--surface-subtle)] text-[var(--text-3)] uppercase text-xs font-semibold tracking-wider sticky top-0 z-10">
+                  <th className="py-2.5 px-3.5 w-12 text-center">Duyệt</th>
+                  <th className="py-2.5 px-3.5 w-24">Giờ</th>
+                  <th className="py-2.5 px-3.5 w-24">User</th>
+                  <th className="py-2.5 px-3.5 w-44">Policy</th>
+                  <th className="py-2.5 px-3.5 max-w-[320px]">Câu lệnh SQL</th>
+                  <th className="py-2.5 px-3.5 w-20 text-right">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
-                {fgaEvents.map((r, i) => {
-                  const isTrap = String(r.FGA_POLICY_NAME).includes('HONEYTOKEN');
-                  const ctx = `${r.CLIENT_PROGRAM_NAME || 'Unknown'} (${r.OS_USERNAME || 'os'}@${r.USERHOST || 'host'})`;
+              <tbody className="divide-y divide-[var(--line)]">
+                {fgaEvents.map((e, idx) => {
+                  const isTrap = String(e.FGA_POLICY_NAME || '').includes('HONEYTOKEN') || String(e.SQL_TEXT || '').includes('NV_TRAP');
                   return (
                     <tr
-                      key={`${r.EVENT_TIMESTAMP}-${r.DBUSERNAME}-${i}`}
-                      className={`hover:bg-purple-500/5 transition-colors ${isTrap ? 'honeytoken-row' : ''} ${
-                        r.reviewed ? 'opacity-75 bg-emerald-950/10' : ''
-                      }`}
+                      key={`${e.EVENT_TIMESTAMP}-${e.DBUSERNAME}-${idx}`}
+                      onClick={() => onOpenFgaModal && onOpenFgaModal(e)}
+                      className={`hover:bg-[var(--surface-hover)] transition-colors cursor-pointer group ${
+                        isTrap ? 'bg-[var(--danger-soft)]/20' : ''
+                      } ${e.reviewed ? 'opacity-70 bg-[var(--surface-subtle)]/40' : ''}`}
                     >
-                      <td className="py-2.5 px-3.5 whitespace-nowrap">
+                      {/* Review Toggle */}
+                      <td className="py-2.5 px-3.5 text-center" onClick={(ev) => ev.stopPropagation()}>
                         <button
-                          onClick={() => onToggleReviewFga(i)}
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer ${
-                            r.reviewed
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                              : 'bg-slate-800/80 text-slate-400 border-white/10 hover:border-emerald-500/40 hover:text-emerald-300'
+                          type="button"
+                          onClick={() => onToggleReviewFga(idx)}
+                          aria-label={e.reviewed ? 'Bỏ đánh dấu đã duyệt' : 'Đánh dấu đã duyệt'}
+                          className={`w-6 h-6 rounded flex items-center justify-center transition-colors cursor-pointer focus-visible:ring mx-auto ${
+                            e.reviewed
+                              ? 'text-[var(--ok)]'
+                              : 'text-[var(--text-3)] hover:text-[var(--ok)]'
                           }`}
                         >
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>{r.reviewed ? 'ĐÃ DUYỆT' : 'CHỜ DUYỆT'}</span>
+                          <CheckCircle2 className="w-4 h-4" />
                         </button>
                       </td>
-                      <td className="py-2.5 px-3.5 font-mono text-slate-300 text-[11px] whitespace-nowrap">{r.EVENT_TIMESTAMP}</td>
-                      <td className="py-2.5 px-3.5 font-bold font-mono text-sky-300">{r.DBUSERNAME}</td>
-                      <td className="py-2.5 px-3.5">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold font-mono border ${
-                            isTrap
-                              ? 'bg-red-500/20 text-red-300 border-red-500/40'
-                              : 'bg-purple-500/20 text-purple-300 border-purple-500/40'
-                          }`}
-                        >
-                          {isTrap && <ShieldAlert className="w-3 h-3 text-red-400" />}
-                          {r.FGA_POLICY_NAME}
+
+                      {/* Time */}
+                      <td className="py-2.5 px-3.5 font-mono text-[var(--text-3)] whitespace-nowrap tabular-nums">
+                        {e.EVENT_TIMESTAMP ? (e.EVENT_TIMESTAMP.includes(' ') ? e.EVENT_TIMESTAMP.split(' ')[1] : e.EVENT_TIMESTAMP) : '—'}
+                      </td>
+
+                      {/* User */}
+                      <td className="py-2.5 px-3.5 font-mono font-semibold text-[var(--text-1)] whitespace-nowrap">
+                        {maskUsername(e.DBUSERNAME)}
+                      </td>
+
+                      {/* Policy Name */}
+                      <td className="py-2.5 px-3.5 font-mono font-medium whitespace-nowrap">
+                        <span className={isTrap ? 'text-[var(--danger)]' : 'text-[var(--text-1)]'}>
+                          {e.FGA_POLICY_NAME}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3.5 font-mono text-[11px] text-slate-400 truncate max-w-[200px]">{ctx}</td>
-                      <td className="py-2.5 px-3.5">
-                        <span
-                          className="font-mono text-[11px] bg-[#0b1322] border border-white/5 px-2 py-0.5 rounded text-sky-300 block max-w-md truncate"
-                          title={r.SQL_TEXT}
-                        >
-                          {r.SQL_TEXT || r.ACTION_NAME}
+
+                      {/* SQL (Truncated) */}
+                      <td className="py-2.5 px-3.5 max-w-[320px]">
+                        <span className="soc-sql-chip truncate block" title={e.SQL_TEXT}>
+                          {e.SQL_TEXT}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3.5 font-mono text-[11px]">
-                        <span
-                          className={`px-2 py-0.5 rounded border ${
-                            Number(r.RETURN_CODE) === 0
-                              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                              : 'bg-red-500/15 text-red-300 border-red-500/30'
-                          }`}
-                        >
-                          {Number(r.RETURN_CODE) === 0 ? '0 (OK)' : `ORA-${r.RETURN_CODE}`}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3.5 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5">
+
+                      {/* Actions */}
+                      <td className="py-2.5 px-3.5 text-right whitespace-nowrap" onClick={(ev) => ev.stopPropagation()}>
+                        <div className="inline-flex items-center gap-1">
+                          {onOpenFgaModal && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenFgaModal(e)}
+                              className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-3)] hover:text-[var(--accent)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer focus-visible:ring"
+                              title="Xem chi tiết"
+                              aria-label="Xem chi tiết sự kiện FGA"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button
-                            onClick={() => onToggleReviewFga(i)}
-                            className={`p-1 rounded border transition-colors cursor-pointer ${
-                              r.reviewed
-                                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                                : 'bg-[#131e33] border-white/10 text-slate-400 hover:text-emerald-300'
-                            }`}
-                            title={r.reviewed ? 'Bỏ dấu đã kiểm duyệt' : 'Đánh dấu đã kiểm duyệt'}
+                            type="button"
+                            onClick={() => onClearSingleFga(idx)}
+                            className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] transition-colors cursor-pointer focus-visible:ring"
+                            title="Xóa sự kiện này"
+                            aria-label="Xóa sự kiện FGA"
                           >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => onClearSingleFga(i)}
-                            className="p-1 rounded bg-transparent border border-red-500/30 text-red-300 hover:bg-red-500/15 transition-colors cursor-pointer"
-                            title="Đã kiểm duyệt & Reset sự kiện này"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>

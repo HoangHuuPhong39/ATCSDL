@@ -1,14 +1,15 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  ShieldAlert,
-  RotateCcw,
+  Sliders,
   Lock,
   Unlock,
   ShieldCheck,
-  Sliders,
+  ShieldAlert,
+  Trash2,
 } from 'lucide-react';
 import { DbUser } from '../../types/ids';
 import { maskUsername } from '../../utils/privacy';
+import { getRiskColorHex } from '../../utils/analytics';
 
 interface IpsTabProps {
   users: DbUser[];
@@ -31,261 +32,302 @@ export const IpsTab: React.FC<IpsTabProps> = ({
   onClearAll,
   onUserAction,
 }) => {
-  const getRiskColor = (score: number) => {
-    if (score >= 80) return '#ef4444';
-    if (score >= 50) return '#f97316';
-    if (score >= 20) return '#eab308';
-    return '#10b981';
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const [confirmLockUser, setConfirmLockUser] = useState<string | null>(null);
+  const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+    };
+  }, []);
+
+  const handleLockUser = (username: string) => {
+    if (confirmLockUser === username) {
+      onUserAction(username, 'lock');
+      setConfirmLockUser(null);
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+    } else {
+      setConfirmLockUser(username);
+      if (lockTimerRef.current) clearTimeout(lockTimerRef.current);
+      lockTimerRef.current = setTimeout(() => setConfirmLockUser(null), 3000);
+    }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Control Panel */}
-      <section className="bg-[#101b2e] border border-purple-500/30 rounded-xl shadow-lg shadow-black/30 overflow-hidden">
-        <div className="p-3.5 px-4.5 border-b border-white/5 bg-[#0e1626]/60 flex items-center justify-between flex-wrap gap-2.5">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 shrink-0">
-              <Sliders className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-[13.5px] font-bold text-slate-100">
-                Trung tâm Điều khiển Phản ứng Đa cấp (Graduated Active Response &amp; IPS)
-              </div>
-              <div className="text-[11px] text-slate-400">
-                Cấu hình tự động hóa phân cấp xử lý vi phạm dựa trên Risk Score thời gian thực
-              </div>
-            </div>
+      <section className="bg-[var(--surface)] border border-[var(--line)] rounded-xl overflow-hidden transition-colors">
+        <div className="p-3.5 px-4 border-b border-[var(--line)] flex items-center justify-between flex-wrap gap-2.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <Sliders className="w-4 h-4 text-[var(--accent)] shrink-0" />
+            <h2 className="text-sm font-semibold text-[var(--text-1)] truncate">
+              Điều khiển phản ứng đa cấp (Active IPS)
+            </h2>
           </div>
 
-          <button
-            onClick={onClearAll}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/35 text-amber-300 hover:bg-amber-500/25 text-[11.5px] font-semibold transition-all cursor-pointer"
-            title="Đặt lại toàn bộ Risk Score về 0 & khôi phục quyền User"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reset Risk Score &amp; Lịch sử</span>
-          </button>
+          {/* Reset button: ghost + trash */}
+          {confirmClearAll ? (
+            <div className="inline-flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  onClearAll();
+                  setConfirmClearAll(false);
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[var(--danger)] text-white text-xs font-medium cursor-pointer transition-colors focus-visible:ring"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Xác nhận Reset toàn bộ?</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmClearAll(false)}
+                className="px-2 py-1.5 rounded-lg bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--text-2)] text-xs cursor-pointer focus-visible:ring"
+              >
+                Hủy
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmClearAll(true)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--line)] hover:border-[var(--danger)] text-[var(--text-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] text-xs font-medium transition-colors cursor-pointer focus-visible:ring"
+              title="Đặt lại toàn bộ Risk Score về 0 & khôi phục quyền User"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Reset Risk Score &amp; Lịch sử</span>
+            </button>
+          )}
         </div>
 
-        <div className="p-4 space-y-3">
+        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Switch 1: Auto Response */}
-          <div className="flex items-center justify-between p-3.5 bg-[#0b1322] border border-white/5 rounded-xl">
-            <div>
-              <div className="font-bold text-slate-100 text-[13px]">
-                Tự động Phản ứng theo Risk Score (Graduated IPS Engine)
+          <div className="flex items-center justify-between p-3 bg-[var(--surface-hover)] border border-[var(--line)] rounded-lg">
+            <div className="min-w-0 pr-3">
+              <div className="font-medium text-[var(--text-1)] text-xs">
+                Tự động phản ứng theo Risk Score
               </div>
-              <div className="text-[11px] text-slate-400 mt-0.5">
-                Tự động hạ quyền Read-Only (Level 2: Score 50–79) hoặc Khóa tài khoản &amp; ngắt kết nối (Level 3: Score &gt;= 80)
+              <div className="text-xs text-[var(--text-3)] mt-0.5 truncate">
+                L2: Read-Only (50–79) · L3: Khóa tài khoản (&ge; 80)
               </div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
+            <label className="relative inline-flex items-center cursor-pointer shrink-0">
               <input
                 type="checkbox"
+                aria-label="Tự động Phản ứng theo Risk Score"
                 checked={autoResponse}
                 onChange={(e) => onToggleAutoResponse(e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-600"></div>
+              <div className="w-10 h-5.5 bg-[var(--line)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-[var(--ok)]"></div>
             </label>
           </div>
 
           {/* Switch 2: Auto Refresh */}
-          <div className="flex items-center justify-between p-3.5 bg-[#0b1322] border border-white/5 rounded-xl">
-            <div>
-              <div className="font-bold text-slate-100 text-[13px]">
-                Tự động đồng bộ dữ liệu thời gian thực từ Oracle (Polling 3 giây)
+          <div className="flex items-center justify-between p-3 bg-[var(--surface-hover)] border border-[var(--line)] rounded-lg">
+            <div className="min-w-0 pr-3">
+              <div className="font-medium text-[var(--text-1)] text-xs">
+                Tự động đồng bộ thời gian thực
               </div>
-              <div className="text-[11px] text-slate-400 mt-0.5">
-                Tự động nhận cảnh báo ngay khi thực thi câu lệnh trên Oracle SQL Developer
+              <div className="text-xs text-[var(--text-3)] mt-0.5 truncate">
+                Polling định kỳ 3 giây từ Oracle FREEPDB1
               </div>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
+            <label className="relative inline-flex items-center cursor-pointer shrink-0">
               <input
                 type="checkbox"
+                aria-label="Tự động đồng bộ dữ liệu thời gian thực từ Oracle"
                 checked={autoRefresh}
                 onChange={(e) => onToggleAutoRefresh(e.target.checked)}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-600"></div>
+              <div className="w-10 h-5.5 bg-[var(--line)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4.5 after:w-4.5 after:transition-all peer-checked:bg-[var(--ok)]"></div>
             </label>
           </div>
         </div>
       </section>
 
       {/* Defense Matrix Table */}
-      <section className="bg-[#101b2e] border border-sky-500/20 rounded-xl shadow-lg shadow-black/30 overflow-hidden">
-        <div className="p-3.5 px-4.5 border-b border-white/5 bg-[#0e1626]/60">
-          <div className="text-[13.5px] font-bold text-slate-100">
-            Ma trận Phân cấp Bảo vệ Chủ động (IPS Defense Level Matrix)
-          </div>
+      <section className="bg-[var(--surface)] border border-[var(--line)] rounded-xl overflow-hidden transition-colors">
+        <div className="p-3 px-4 border-b border-[var(--line)]">
+          <h2 className="text-sm font-semibold text-[var(--text-1)]">
+            Ma trận phân cấp bảo vệ chủ động (L0–L3)
+          </h2>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-[12px]">
+          <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-sky-500/15 bg-[#0b1322] text-slate-400 uppercase text-[10.5px] font-bold tracking-wider">
-                <th className="py-2.5 px-3.5">Cấp độ</th>
-                <th className="py-2.5 px-3.5">Phạm vi Risk Score</th>
-                <th className="py-2.5 px-3.5">Hành vi Kích hoạt</th>
-                <th className="py-2.5 px-3.5">Biện pháp Can thiệp Tự động</th>
-                <th className="py-2.5 px-3.5">Khả năng thao tác CSDL</th>
+              <tr className="border-b border-[var(--line)] bg-[var(--surface-subtle)] text-[var(--text-3)] uppercase text-xs font-semibold tracking-wider sticky top-0 z-10">
+                <th className="py-2.5 px-3.5 w-36">Cấp độ</th>
+                <th className="py-2.5 px-3.5 w-24">Risk Score</th>
+                <th className="py-2.5 px-3.5 min-w-[200px]">Hành vi kích hoạt</th>
+                <th className="py-2.5 px-3.5 min-w-[180px]">Biện pháp can thiệp</th>
+                <th className="py-2.5 px-3.5 w-44">Quyền CSDL</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5 text-[12px]">
-              <tr>
-                <td className="py-3 px-3.5">
-                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold font-mono bg-emerald-500/15 text-emerald-300 border border-emerald-500/35">
-                    Level 0: Normal
-                  </span>
+            <tbody className="divide-y divide-[var(--line)]">
+              <tr className="hover:bg-[var(--surface-hover)] transition-colors">
+                <td className="py-2.5 px-3.5 font-semibold text-[var(--ok)] whitespace-nowrap">
+                  Level 0: Normal
                 </td>
-                <td className="py-3 px-3.5 font-mono text-slate-300">0 – 19</td>
-                <td className="py-3 px-3.5 text-slate-200">Hoạt động bình thường, đúng nghiệp vụ</td>
-                <td className="py-3 px-3.5 text-slate-400">Ghi nhận kiểm toán tiêu chuẩn</td>
-                <td className="py-3 px-3.5 text-emerald-400 font-semibold font-mono">Đầy đủ quyền SELECT, INSERT, UPDATE, DELETE</td>
+                <td className="py-2.5 px-3.5 font-mono text-[var(--text-3)]">0 – 19</td>
+                <td className="py-2.5 px-3.5 text-[var(--text-2)]">Hoạt động bình thường</td>
+                <td className="py-2.5 px-3.5 text-[var(--text-3)]">Ghi nhận kiểm toán tiêu chuẩn</td>
+                <td className="py-2.5 px-3.5 text-[var(--ok)] font-mono font-medium">FULL DML</td>
               </tr>
-              <tr>
-                <td className="py-3 px-3.5">
-                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold font-mono bg-sky-500/15 text-sky-300 border border-sky-500/35">
-                    Level 1: Warning
-                  </span>
+              <tr className="hover:bg-[var(--surface-hover)] transition-colors">
+                <td className="py-2.5 px-3.5 font-semibold text-[var(--accent)] whitespace-nowrap">
+                  Level 1: Warning
                 </td>
-                <td className="py-3 px-3.5 font-mono text-slate-300">20 – 49</td>
-                <td className="py-3 px-3.5 text-slate-200">Thử mật khẩu sai 1-2 lần, truy cập cột lương cao FGA đơn lẻ, thăm dò thống kê 1-2 lần</td>
-                <td className="py-3 px-3.5 text-slate-400">Cảnh báo SOC, tăng tần suất theo dõi</td>
-                <td className="py-3 px-3.5 text-sky-300 font-semibold font-mono">Duy trì quyền hiện tại</td>
+                <td className="py-2.5 px-3.5 font-mono text-[var(--text-3)]">20 – 49</td>
+                <td className="py-2.5 px-3.5 text-[var(--text-2)]">Sai mật khẩu 1-2 lần, đọc lương cao FGA</td>
+                <td className="py-2.5 px-3.5 text-[var(--text-3)]">Cảnh báo SOC, tăng giám sát</td>
+                <td className="py-2.5 px-3.5 text-[var(--accent)] font-mono font-medium">Duy trì quyền</td>
               </tr>
-              <tr>
-                <td className="py-3 px-3.5">
-                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold font-mono bg-amber-500/15 text-amber-300 border border-amber-500/35">
-                    Level 2: Containment
-                  </span>
+              <tr className="hover:bg-[var(--surface-hover)] transition-colors">
+                <td className="py-2.5 px-3.5 font-semibold text-[var(--warn)] whitespace-nowrap">
+                  Level 2: Containment
                 </td>
-                <td className="py-3 px-3.5 font-mono text-slate-300">50 – 79</td>
-                <td className="py-3 px-3.5 text-slate-200">
-                  Giả mạo/Giả danh (Masquerading), Tấn công Suy diễn SDB (Count-based COUNT=1&amp;SUM, Tracker Attack, Linear System A·X=B), Trigger chặn sửa lương/xóa NV
-                </td>
-                <td className="py-3 px-3.5 text-amber-300 font-medium">Thu hồi quyền DML (REVOKE INSERT, UPDATE, DELETE)</td>
-                <td className="py-3 px-3.5 text-amber-400 font-semibold font-mono">Chỉ cho phép đọc (READ-ONLY)</td>
+                <td className="py-2.5 px-3.5 font-mono text-[var(--text-3)]">50 – 79</td>
+                <td className="py-2.5 px-3.5 text-[var(--text-2)]">Giả mạo Host, Suy diễn SDB, Trigger chặn</td>
+                <td className="py-2.5 px-3.5 text-[var(--warn)] font-medium">Thu hồi quyền DML (REVOKE DML)</td>
+                <td className="py-2.5 px-3.5 text-[var(--warn)] font-mono font-medium">READ-ONLY</td>
               </tr>
-              <tr>
-                <td className="py-3 px-3.5">
-                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold font-mono bg-red-500/15 text-red-300 border border-red-500/35">
-                    Level 3: Isolation
-                  </span>
+              <tr className="hover:bg-[var(--surface-hover)] transition-colors">
+                <td className="py-2.5 px-3.5 font-semibold text-[var(--danger)] whitespace-nowrap">
+                  Level 3: Isolation
                 </td>
-                <td className="py-3 px-3.5 font-mono text-slate-300">80 – 100</td>
-                <td className="py-3 px-3.5 text-slate-200">
-                  SQL Injection, Leo thang đặc quyền, Đăng nhập thất bại liên tiếp (Brute-Force), Truy cập khóa mã hóa trái phép (Trực tiếp &amp; Gián tiếp), Tấn công trực tiếp SDB &amp; Chạm bẫy Honeytoken (NV_TRAP)
-                </td>
-                <td className="py-3 px-3.5 text-red-300 font-medium">Khóa tài khoản (ALTER USER LOCK) &amp; Kill session (ALTER SYSTEM KILL SESSION)</td>
-                <td className="py-3 px-3.5 text-red-400 font-semibold font-mono">Toàn bộ kết nối bị từ chối và chặn đứng</td>
+                <td className="py-2.5 px-3.5 font-mono text-[var(--text-3)]">80 – 100</td>
+                <td className="py-2.5 px-3.5 text-[var(--text-2)]">SQLi, Leo thang quyền, Chạm bẫy NV_TRAP</td>
+                <td className="py-2.5 px-3.5 text-[var(--danger)] font-medium">Khóa tài khoản &amp; Kill session</td>
+                <td className="py-2.5 px-3.5 text-[var(--danger)] font-mono font-medium">LOCKED (TỪ CHỐI)</td>
               </tr>
             </tbody>
           </table>
         </div>
       </section>
 
-      {/* User Status under IPS */}
-      <section className="bg-[#101b2e] border border-sky-500/20 rounded-xl shadow-lg shadow-black/30 overflow-hidden">
-        <div className="p-3.5 px-4.5 border-b border-white/5 bg-[#0e1626]/60">
-          <div className="text-[13.5px] font-bold text-slate-100">
-            Trạng thái Cách ly &amp; Phản ứng Thực tế Từng User
-          </div>
+      {/* User Status Table under IPS */}
+      <section className="bg-[var(--surface)] border border-[var(--line)] rounded-xl overflow-hidden transition-colors">
+        <div className="p-3 px-4 border-b border-[var(--line)]">
+          <h2 className="text-sm font-semibold text-[var(--text-1)]">
+            Trạng thái phản ứng từng tài khoản
+          </h2>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-[12px]">
+          <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-sky-500/15 bg-[#0b1322] text-slate-400 uppercase text-[10.5px] font-bold tracking-wider">
-                <th className="py-2.5 px-3.5">Tài khoản</th>
-                <th className="py-2.5 px-3.5">Risk Score</th>
-                <th className="py-2.5 px-3.5">Cấp độ Phản ứng Hiện tại</th>
-                <th className="py-2.5 px-3.5">Chế độ Quyền</th>
-                <th className="py-2.5 px-3.5">Trạng thái Tài khoản</th>
-                <th className="py-2.5 px-3.5 text-right">Hành động Phản ứng Thủ công</th>
+              <tr className="border-b border-[var(--line)] bg-[var(--surface-subtle)] text-[var(--text-3)] uppercase text-xs font-semibold tracking-wider sticky top-0 z-10">
+                <th className="py-2.5 px-3.5 w-24">User</th>
+                <th className="py-2.5 px-3.5 w-28">Risk Score</th>
+                <th className="py-2.5 px-3.5 min-w-[160px]">Cấp độ hiện tại</th>
+                <th className="py-2.5 px-3.5 w-28">Quyền</th>
+                <th className="py-2.5 px-3.5 w-24">Trạng thái</th>
+                <th className="py-2.5 px-3.5 text-right w-48">Thao tác thủ công</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-[var(--line)]">
               {users.map((u) => {
                 const isLocked = u.ACCOUNT_STATUS.toUpperCase().includes('LOCK');
-                const isReadOnly = u.DML_STATUS.toUpperCase() === 'READ-ONLY';
-                const color = getRiskColor(u.RISK_SCORE);
+                const isReadOnly = !isLocked && u.DML_STATUS.toUpperCase() === 'READ-ONLY';
+                const isOpen = !isLocked && !isReadOnly;
+                const isConfirmingLock = confirmLockUser === u.USERNAME;
+                const color = getRiskColorHex(u.RISK_SCORE);
 
                 return (
-                  <tr key={u.USERNAME} className="hover:bg-sky-500/5 transition-colors">
-                    <td className="py-3 px-3.5 font-bold font-mono text-sky-300">
+                  <tr key={u.USERNAME} className="hover:bg-[var(--surface-hover)] transition-colors">
+                    <td className="py-2.5 px-3.5 font-semibold font-mono text-[var(--text-1)] whitespace-nowrap">
                       {maskUsername(u.USERNAME, privacyMode)}
                     </td>
-                    <td className="py-3 px-3.5">
-                      <div className="inline-flex items-center gap-2 min-w-[90px]">
-                        <span className="font-mono font-bold text-[11px]" style={{ color }}>
-                          {u.RISK_SCORE}/100
-                        </span>
-                        <div className="w-12 h-1 bg-white/10 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full" style={{ width: `${u.RISK_SCORE}%`, backgroundColor: color }} />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-3.5">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold font-mono border ${
-                          u.RESPONSE_LEVEL >= 3
-                            ? 'bg-red-500/15 text-red-300 border-red-500/40'
-                            : u.RESPONSE_LEVEL === 2
-                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
-                            : 'bg-sky-500/15 text-sky-300 border-sky-500/40'
-                        }`}
-                      >
-                        {u.RESPONSE_LABEL}
+                    <td className="py-2.5 px-3.5 font-mono">
+                      <span className="font-semibold tabular-nums" style={{ color }}>
+                        {u.RISK_SCORE}/100
                       </span>
                     </td>
-                    <td className="py-3 px-3.5">
-                      <span
-                        className={`px-2 py-0.5 rounded text-[11px] font-bold font-mono border ${
-                          isReadOnly
-                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
-                            : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-                        }`}
-                      >
+                    <td className="py-2.5 px-3.5 font-mono text-[var(--text-2)]">
+                      {u.RESPONSE_LABEL}
+                    </td>
+                    <td className="py-2.5 px-3.5 font-mono whitespace-nowrap">
+                      <span className={isReadOnly ? 'text-[var(--warn)]' : 'text-[var(--ok)]'}>
                         {u.DML_STATUS}
                       </span>
                     </td>
-                    <td className="py-3 px-3.5 font-mono text-slate-300">{u.ACCOUNT_STATUS}</td>
-                    <td className="py-3 px-3.5 text-right">
+                    <td className="py-2.5 px-3.5 font-mono whitespace-nowrap">
+                      <span className={isLocked ? 'text-[var(--danger)] font-semibold' : 'text-[var(--ok)]'}>
+                        {u.ACCOUNT_STATUS}
+                      </span>
+                    </td>
+
+                    {/* Non-contradictory action buttons */}
+                    <td className="py-2.5 px-3.5 text-right whitespace-nowrap">
                       <div className="inline-flex items-center gap-1.5 justify-end">
-                        {isReadOnly ? (
+                        {isLocked && (
                           <button
-                            onClick={() => onUserAction(u.USERNAME, 'grant_dml')}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#131e33] border border-sky-500/25 text-sky-300 hover:bg-[#1a2942] text-[11px] font-semibold cursor-pointer"
-                          >
-                            <ShieldCheck className="w-3 h-3" />
-                            <span>Khôi phục DML</span>
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => onUserAction(u.USERNAME, 'revoke_dml')}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/35 text-amber-300 hover:bg-amber-500/25 text-[11px] font-semibold cursor-pointer"
-                          >
-                            <ShieldAlert className="w-3 h-3" />
-                            <span>Read-Only</span>
-                          </button>
-                        )}
-                        {isLocked ? (
-                          <button
+                            type="button"
                             onClick={() => onUserAction(u.USERNAME, 'unlock')}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 text-[11px] font-semibold cursor-pointer"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[var(--ok-soft)] border border-[var(--ok)]/30 text-[var(--ok)] hover:bg-[var(--ok-soft)]/80 text-xs font-medium cursor-pointer transition-colors focus-visible:ring"
+                            title="Mở khóa tài khoản & đặt lại Risk"
                           >
                             <Unlock className="w-3 h-3" />
-                            <span>Mở khóa User</span>
+                            <span>Mở khóa</span>
                           </button>
-                        ) : (
-                          <button
-                            onClick={() => onUserAction(u.USERNAME, 'lock')}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/15 border border-red-500/35 text-red-300 hover:bg-red-500/25 text-[11px] font-semibold cursor-pointer"
-                          >
-                            <Lock className="w-3 h-3" />
-                            <span>Khóa L3 (Isolation)</span>
-                          </button>
+                        )}
+
+                        {isReadOnly && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => onUserAction(u.USERNAME, 'grant_dml')}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[var(--surface)] border border-[var(--line)] text-[var(--text-1)] hover:border-[var(--accent)] text-xs font-medium cursor-pointer transition-colors focus-visible:ring"
+                              title="Khôi phục quyền DML"
+                            >
+                              <ShieldCheck className="w-3 h-3 text-[var(--accent)]" />
+                              <span>Khôi phục DML</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleLockUser(u.USERNAME)}
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium cursor-pointer transition-colors focus-visible:ring ${
+                                isConfirmingLock
+                                  ? 'bg-[var(--danger)] text-white border border-[var(--danger)] animate-pulse'
+                                  : 'bg-[var(--danger-soft)] border border-[var(--danger)]/30 text-[var(--danger)] hover:bg-[var(--danger)] hover:text-white'
+                              }`}
+                              title="Khóa tài khoản"
+                            >
+                              <Lock className="w-3 h-3" />
+                              <span>{isConfirmingLock ? 'Bấm lại để xác nhận' : 'Khóa'}</span>
+                            </button>
+                          </>
+                        )}
+
+                        {isOpen && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => onUserAction(u.USERNAME, 'revoke_dml')}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[var(--surface)] border border-[var(--line)] text-[var(--text-2)] hover:text-[var(--warn)] text-xs font-medium cursor-pointer transition-colors focus-visible:ring"
+                              title="Hạ quyền Read-Only"
+                            >
+                              <ShieldAlert className="w-3 h-3 text-[var(--warn)]" />
+                              <span>Hạ quyền</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleLockUser(u.USERNAME)}
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium cursor-pointer transition-colors focus-visible:ring ${
+                                isConfirmingLock
+                                  ? 'bg-[var(--danger)] text-white border border-[var(--danger)] animate-pulse'
+                                  : 'bg-[var(--danger-soft)] border border-[var(--danger)]/30 text-[var(--danger)] hover:bg-[var(--danger)] hover:text-white'
+                              }`}
+                              title="Khóa tài khoản"
+                            >
+                              <Lock className="w-3 h-3" />
+                              <span>{isConfirmingLock ? 'Bấm lại để xác nhận' : 'Khóa'}</span>
+                            </button>
+                          </>
                         )}
                       </div>
                     </td>

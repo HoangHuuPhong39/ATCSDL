@@ -5,10 +5,7 @@ import {
   Eye,
   CheckCircle2,
   CheckCheck,
-  RotateCcw,
   Trash2,
-  Terminal,
-  FileDown,
 } from 'lucide-react';
 import { AuditLogRow } from '../../types/ids';
 
@@ -32,10 +29,10 @@ export const AuditTab: React.FC<AuditTabProps> = ({
   onResetReviewedAudit,
   onClearSingleAudit,
   onClearAllAudit,
-  onOpenOracleBridge,
-  onExportAuditPdf,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterReview, setFilterReview] = useState<'ALL' | 'PENDING' | 'REVIEWED'>('ALL');
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
 
   const reviewedCount = useMemo(() => auditLogs.filter((r) => r.reviewed).length, [auditLogs]);
   const pendingCount = auditLogs.length - reviewedCount;
@@ -44,6 +41,8 @@ export const AuditTab: React.FC<AuditTabProps> = ({
     return auditLogs
       .map((row, originalIndex) => ({ row, originalIndex }))
       .filter(({ row }) => {
+        if (filterReview === 'PENDING' && row.reviewed) return false;
+        if (filterReview === 'REVIEWED' && !row.reviewed) return false;
         if (!searchTerm) return true;
         const term = searchTerm.toLowerCase();
         return (
@@ -57,238 +56,221 @@ export const AuditTab: React.FC<AuditTabProps> = ({
           String(row.RETURN_CODE || '').toLowerCase().includes(term)
         );
       });
-  }, [auditLogs, searchTerm]);
+  }, [auditLogs, searchTerm, filterReview]);
 
   return (
-    <div className="space-y-5">
-      {/* Search & Review Reset Header */}
-      <section className="bg-[#101b2e] border border-sky-500/20 rounded-xl shadow-lg shadow-black/30 overflow-hidden">
-        <div className="p-3.5 px-4.5 border-b border-white/5 bg-[#0e1626]/60 flex items-center justify-between flex-wrap gap-2.5">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
-              <FileText className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-[13.5px] font-bold text-slate-100">
-                Nhật ký Kiểm toán Hợp nhất Thời gian thực (UNIFIED_AUDIT_TRAIL)
-              </div>
-              <div className="text-[11px] text-slate-400">
-                Hiển thị <strong className="text-sky-300 font-mono">{filteredWithIndex.length}</strong> / {auditLogs.length} sự kiện · Đã duyệt:{' '}
-                <strong className="text-emerald-400 font-mono">{reviewedCount}</strong>
-              </div>
-            </div>
-          </div>
+    <div className="space-y-4">
+      {/* 1-Row Compact Filter & Action Toolbar */}
+      <section className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-3 flex flex-col md:flex-row md:items-center justify-between gap-3 transition-colors">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          {/* Review Filter Dropdown */}
+          <select
+            value={filterReview}
+            onChange={(e) => setFilterReview(e.target.value as 'ALL' | 'PENDING' | 'REVIEWED')}
+            className="bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--text-2)] text-xs rounded-lg px-2.5 py-1.5 outline-none focus-visible:ring cursor-pointer"
+          >
+            <option value="ALL">Mọi trạng thái ({auditLogs.length})</option>
+            <option value="PENDING">Chờ duyệt ({pendingCount})</option>
+            <option value="REVIEWED">Đã duyệt ({reviewedCount})</option>
+          </select>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Lọc User, Policy, Client, SQL..."
-                className="bg-[#0b1322] border border-sky-500/20 rounded-lg text-slate-200 pl-8 pr-3 py-1 text-[11.5px] outline-none focus:border-sky-400 w-48 sm:w-56 font-sans transition-all"
-              />
-            </div>
-
-            {onExportAuditPdf && (
-              <button
-                onClick={onExportAuditPdf}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/15 border border-purple-500/40 text-purple-200 hover:bg-purple-500/25 text-[11.5px] font-semibold transition-all cursor-pointer"
-                title="Xuất Nhật ký Kiểm toán (UNIFIED_AUDIT_TRAIL) sang định dạng PDF"
-              >
-                <FileDown className="w-3.5 h-3.5 text-purple-300" />
-                <span>Xuất PDF Audit Log</span>
-              </button>
-            )}
-
-            {auditLogs.length > 0 && pendingCount > 0 && (
-              <button
-                onClick={onMarkAllAuditReviewed}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 text-[11.5px] font-semibold transition-all cursor-pointer"
-              >
-                <CheckCheck className="w-3.5 h-3.5" />
-                <span>Duyệt tất cả ({pendingCount})</span>
-              </button>
-            )}
-
-            {reviewedCount > 0 && (
-              <button
-                onClick={onResetReviewedAudit}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/45 text-amber-200 hover:bg-amber-500/30 text-[11.5px] font-bold transition-all cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Reset đã duyệt ({reviewedCount})</span>
-              </button>
-            )}
-
-            {auditLogs.length > 0 ? (
-              <button
-                onClick={onClearAllAudit}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-transparent border border-red-500/35 text-red-300 hover:bg-red-500/15 text-[11.5px] font-semibold transition-all cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Reset Audit Log</span>
-              </button>
-            ) : (
-              onOpenOracleBridge && (
-                <button
-                  onClick={onOpenOracleBridge}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-300 hover:bg-emerald-500/25 text-[11.5px] font-semibold transition-all cursor-pointer"
-                >
-                  <Terminal className="w-3.5 h-3.5" />
-                  <span>Kết nối Oracle SQL Developer</span>
-                </button>
-              )
-            )}
+          {/* Search box */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-[var(--text-3)] absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Tìm user, policy, SQL..."
+              className="bg-[var(--surface-hover)] border border-[var(--line)] rounded-lg text-[var(--text-1)] pl-8 pr-3 py-1 text-xs outline-none focus:border-[var(--accent)] w-48 sm:w-64 font-sans transition-all"
+            />
           </div>
         </div>
 
-        <div className="overflow-x-auto max-h-[580px]">
-          {filteredWithIndex.length === 0 ? (
-            <div className="p-10 text-center text-slate-400 flex flex-col items-center gap-3">
-              <CheckCircle2 className="w-8 h-8 text-emerald-400" />
-              <div className="text-[12.5px] text-slate-200 font-semibold">
-                {auditLogs.length === 0
-                  ? 'Toàn bộ bản ghi Unified Audit Trail đã được kiểm duyệt và Reset hoàn tất.'
-                  : 'Không có bản ghi kiểm toán nào khớp bộ lọc.'}
-              </div>
-              {auditLogs.length === 0 && onOpenOracleBridge && (
+        {/* Action Buttons (Ghost + Trash icon) */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {auditLogs.length > 0 && pendingCount > 0 && (
+            <button
+              type="button"
+              onClick={onMarkAllAuditReviewed}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[var(--ok-soft)] border border-[var(--ok)]/30 text-[var(--ok)] hover:bg-[var(--ok-soft)]/80 text-xs font-medium transition-colors cursor-pointer focus-visible:ring"
+              title="Đánh dấu tất cả nhật ký đã duyệt"
+            >
+              <CheckCheck className="w-3.5 h-3.5" />
+              <span>Duyệt ({pendingCount})</span>
+            </button>
+          )}
+
+          {reviewedCount > 0 && (
+            <button
+              type="button"
+              onClick={onResetReviewedAudit}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--line)] hover:border-[var(--danger)] text-[var(--text-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] text-xs font-medium transition-colors cursor-pointer focus-visible:ring"
+              title="Reset các bản ghi đã kiểm duyệt"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Reset đã duyệt ({reviewedCount})</span>
+            </button>
+          )}
+
+          {auditLogs.length > 0 && (
+            confirmClearAll ? (
+              <div className="inline-flex items-center gap-1">
                 <button
-                  onClick={onOpenOracleBridge}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 text-[12px] font-semibold transition-all cursor-pointer"
+                  type="button"
+                  onClick={() => {
+                    onClearAllAudit();
+                    setConfirmClearAll(false);
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[var(--danger)] text-white text-xs font-medium cursor-pointer transition-colors focus-visible:ring"
                 >
-                  <Terminal className="w-3.5 h-3.5" />
-                  <span>Kết nối Oracle SQL Developer</span>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Xác nhận xóa?</span>
                 </button>
-              )}
+                <button
+                  type="button"
+                  onClick={() => setConfirmClearAll(false)}
+                  className="px-2 py-1.5 rounded-lg bg-[var(--surface-hover)] border border-[var(--line)] text-[var(--text-2)] text-xs cursor-pointer focus-visible:ring"
+                >
+                  Hủy
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmClearAll(true)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--line)] hover:border-[var(--danger)] text-[var(--text-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] text-xs font-medium transition-colors cursor-pointer focus-visible:ring"
+                title="Xóa toàn bộ nhật ký kiểm toán"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Xóa hết</span>
+              </button>
+            )
+          )}
+        </div>
+      </section>
+
+      {/* Main Audit Trail Table */}
+      <section className="bg-[var(--surface)] border border-[var(--line)] rounded-xl overflow-hidden transition-colors">
+        <div className="overflow-x-auto">
+          {filteredWithIndex.length === 0 ? (
+            <div className="py-12 text-center text-[var(--text-3)] flex flex-col items-center gap-2 text-xs">
+              <CheckCircle2 className="w-8 h-8 text-[var(--ok)]" />
+              <span>Không có bản ghi kiểm toán nào khớp bộ lọc.</span>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse text-[12px]">
+            <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-sky-500/15 bg-[#0b1322] text-slate-400 uppercase text-[10.5px] font-bold tracking-wider sticky top-0 z-10">
-                  <th className="py-2.5 px-3.5">Trạng thái</th>
-                  <th className="py-2.5 px-3.5">Thời gian</th>
-                  <th className="py-2.5 px-3.5">DB User</th>
-                  <th className="py-2.5 px-3.5">Loại Audit / Policy</th>
-                  <th className="py-2.5 px-3.5">Action</th>
-                  <th className="py-2.5 px-3.5">Đối tượng</th>
-                  <th className="py-2.5 px-3.5">Ngữ cảnh (Client / Host)</th>
-                  <th className="py-2.5 px-3.5">Câu lệnh SQL</th>
-                  <th className="py-2.5 px-3.5">Mã trả về</th>
-                  <th className="py-2.5 px-3.5 text-right">Kiểm duyệt &amp; Reset</th>
+                <tr className="border-b border-[var(--line)] bg-[var(--surface-subtle)] text-[var(--text-3)] uppercase text-xs font-semibold tracking-wider sticky top-0 z-10">
+                  <th className="py-2.5 px-3.5 w-12 text-center">Duyệt</th>
+                  <th className="py-2.5 px-3.5 w-24">Giờ</th>
+                  <th className="py-2.5 px-3.5 w-24">User</th>
+                  <th className="py-2.5 px-3.5 w-36">Loại / Policy</th>
+                  <th className="py-2.5 px-3.5 w-20">Action</th>
+                  <th className="py-2.5 px-3.5 w-28">Đối tượng</th>
+                  <th className="py-2.5 px-3.5 max-w-[280px]">Câu lệnh SQL</th>
+                  <th className="py-2.5 px-3.5 w-20">Mã</th>
+                  <th className="py-2.5 px-3.5 w-20 text-right">Thao tác</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-[var(--line)]">
                 {filteredWithIndex.map(({ row: r, originalIndex }) => {
                   const code = Number(r.RETURN_CODE || 0);
-                  const isFga = r.AUDIT_TYPE === 'FineGrainedAudit' || !!r.FGA_POLICY_NAME;
                   const isTrap = String(r.FGA_POLICY_NAME || '').includes('HONEYTOKEN');
                   const objFull =
                     r.OBJECT_SCHEMA && r.OBJECT_NAME
                       ? `${r.OBJECT_SCHEMA}.${r.OBJECT_NAME}`
                       : r.OBJECT_NAME || '—';
-                  const ctx = `${r.CLIENT_PROGRAM_NAME || '—'} @ ${r.USERHOST || '—'}`;
 
                   return (
                     <tr
                       key={`${r.EVENT_TIMESTAMP}-${r.DBUSERNAME}-${originalIndex}`}
                       onClick={() => onOpenAuditModal(r)}
-                      className={`hover:bg-sky-500/5 transition-colors cursor-pointer ${
-                        isTrap ? 'honeytoken-row' : ''
-                      } ${r.reviewed ? 'opacity-75 bg-emerald-950/10' : ''}`}
+                      className={`hover:bg-[var(--surface-hover)] transition-colors cursor-pointer group ${
+                        isTrap ? 'bg-[var(--danger-soft)]/20' : ''
+                      } ${r.reviewed ? 'opacity-70 bg-[var(--surface-subtle)]/40' : ''}`}
                     >
-                      <td className="py-2.5 px-3.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                      {/* Review toggle */}
+                      <td className="py-2.5 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                         <button
+                          type="button"
                           onClick={() => onToggleReviewAudit(originalIndex)}
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-all cursor-pointer ${
+                          aria-label={r.reviewed ? 'Bỏ đánh dấu đã duyệt' : 'Đánh dấu đã duyệt'}
+                          className={`w-6 h-6 rounded flex items-center justify-center transition-colors cursor-pointer focus-visible:ring mx-auto ${
                             r.reviewed
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                              : 'bg-slate-800/80 text-slate-400 border-white/10 hover:border-emerald-500/40 hover:text-emerald-300'
+                              ? 'text-[var(--ok)]'
+                              : 'text-[var(--text-3)] hover:text-[var(--ok)]'
                           }`}
                         >
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>{r.reviewed ? 'ĐÃ DUYỆT' : 'CHỜ DUYỆT'}</span>
+                          <CheckCircle2 className="w-4 h-4" />
                         </button>
                       </td>
-                      <td className="py-2.5 px-3.5 font-mono text-slate-300 text-[11px] whitespace-nowrap">
-                        {r.EVENT_TIMESTAMP}
+
+                      {/* Time */}
+                      <td className="py-2.5 px-3.5 font-mono text-[var(--text-3)] whitespace-nowrap tabular-nums">
+                        {r.EVENT_TIMESTAMP ? (r.EVENT_TIMESTAMP.includes(' ') ? r.EVENT_TIMESTAMP.split(' ')[1] : r.EVENT_TIMESTAMP) : '—'}
                       </td>
-                      <td className="py-2.5 px-3.5 font-bold font-mono text-sky-300">{r.DBUSERNAME}</td>
-                      <td className="py-2.5 px-3.5">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono border ${
-                            isTrap
-                              ? 'bg-red-500/20 text-red-300 border-red-500/40'
-                              : isFga
-                              ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
-                              : 'bg-slate-700/40 text-slate-300 border-slate-600'
-                          }`}
-                        >
+
+                      {/* User */}
+                      <td className="py-2.5 px-3.5 font-mono font-semibold text-[var(--text-1)] whitespace-nowrap">
+                        {r.DBUSERNAME}
+                      </td>
+
+                      {/* Policy / Audit Type */}
+                      <td className="py-2.5 px-3.5 whitespace-nowrap font-mono text-[var(--text-2)]">
+                        <span className="truncate block max-w-[130px]" title={r.FGA_POLICY_NAME || r.AUDIT_TYPE || 'Standard'}>
                           {r.FGA_POLICY_NAME || r.AUDIT_TYPE || 'Standard'}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3.5">
-                        <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 font-mono text-[11px]">
-                          {r.ACTION_NAME}
-                        </span>
+
+                      {/* Action */}
+                      <td className="py-2.5 px-3.5 font-mono font-medium text-[var(--accent)]">
+                        {r.ACTION_NAME}
                       </td>
-                      <td className="py-2.5 px-3.5 font-mono text-slate-300 text-[11.5px]">{objFull}</td>
-                      <td
-                        className="py-2.5 px-3.5 font-mono text-[11px] text-slate-400 truncate max-w-[170px]"
-                        title={ctx}
-                      >
-                        {ctx}
+
+                      {/* Object */}
+                      <td className="py-2.5 px-3.5 font-mono text-[var(--text-2)] truncate max-w-[110px]" title={objFull}>
+                        {objFull}
                       </td>
-                      <td className="py-2.5 px-3.5">
+
+                      {/* SQL Text (Truncated) */}
+                      <td className="py-2.5 px-3.5 max-w-[280px]">
                         {r.SQL_TEXT ? (
-                          <span
-                            className="font-mono text-[11px] bg-[#0b1322] border border-white/5 px-2 py-0.5 rounded text-sky-300 block max-w-xs truncate"
-                            title={r.SQL_TEXT}
-                          >
+                          <span className="soc-sql-chip truncate block" title={r.SQL_TEXT}>
                             {r.SQL_TEXT}
                           </span>
                         ) : (
-                          <span className="text-slate-500 font-mono">—</span>
+                          <span className="text-[var(--text-3)] font-mono">—</span>
                         )}
                       </td>
-                      <td className="py-2.5 px-3.5 font-mono text-[11px]">
-                        <span
-                          className={`px-2 py-0.5 rounded border ${
-                            code === 0
-                              ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                              : 'bg-red-500/15 text-red-300 border-red-500/30'
-                          }`}
-                        >
-                          {code === 0 ? '0 (OK)' : `ORA-${code}`}
+
+                      {/* Return Code */}
+                      <td className="py-2.5 px-3.5 font-mono whitespace-nowrap">
+                        <span className={code === 0 ? 'text-[var(--ok)]' : 'text-[var(--danger)] font-semibold'}>
+                          {code === 0 ? '0' : `ORA-${code}`}
                         </span>
                       </td>
+
+                      {/* Actions */}
                       <td className="py-2.5 px-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="inline-flex items-center gap-1.5">
+                        <div className="inline-flex items-center gap-1">
                           <button
-                            onClick={() => onToggleReviewAudit(originalIndex)}
-                            className={`p-1 rounded border transition-colors cursor-pointer ${
-                              r.reviewed
-                                ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                                : 'bg-[#131e33] border-white/10 text-slate-400 hover:text-emerald-300'
-                            }`}
-                            title={r.reviewed ? 'Bỏ dấu đã kiểm duyệt' : 'Đánh dấu đã kiểm duyệt'}
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
+                            type="button"
                             onClick={() => onOpenAuditModal(r)}
-                            className="p-1 rounded bg-[#131e33] border border-sky-500/20 text-slate-300 hover:text-white transition-colors cursor-pointer"
-                            title="Xem chi tiết bản ghi"
+                            className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-3)] hover:text-[var(--accent)] hover:bg-[var(--surface-hover)] transition-colors cursor-pointer focus-visible:ring"
+                            title="Xem chi tiết"
+                            aria-label="Xem chi tiết bản ghi"
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
                           <button
+                            type="button"
                             onClick={() => onClearSingleAudit(originalIndex)}
-                            className="p-1 rounded bg-transparent border border-red-500/30 text-red-300 hover:bg-red-500/15 transition-colors cursor-pointer"
-                            title="Đã kiểm duyệt & Reset bản ghi này"
+                            className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] transition-colors cursor-pointer focus-visible:ring"
+                            title="Xóa bản ghi này"
+                            aria-label="Xóa bản ghi"
                           >
-                            <RotateCcw className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
