@@ -7,15 +7,18 @@ import {
   CheckCheck,
   Trash2,
 } from 'lucide-react';
-import { AuditLogRow } from '../../types/ids';
+import { AuditLogRow, getAuditKey } from '../../types/ids';
+import { maskUsername, redactSensitiveDetails } from '../../utils/privacy';
 
 interface AuditTabProps {
   auditLogs: AuditLogRow[];
+  privacyMode?: boolean;
+  knownUsers?: string[];
   onOpenAuditModal: (row: AuditLogRow) => void;
-  onToggleReviewAudit: (index: number) => void;
+  onToggleReviewAudit: (auditKey: string) => void;
   onMarkAllAuditReviewed: () => void;
   onResetReviewedAudit: () => void;
-  onClearSingleAudit: (index: number) => void;
+  onClearSingleAudit: (auditKey: string) => void;
   onClearAllAudit: () => void;
   onOpenOracleBridge?: () => void;
   onExportAuditPdf?: () => void;
@@ -23,6 +26,8 @@ interface AuditTabProps {
 
 export const AuditTab: React.FC<AuditTabProps> = ({
   auditLogs,
+  privacyMode = false,
+  knownUsers = [],
   onOpenAuditModal,
   onToggleReviewAudit,
   onMarkAllAuditReviewed,
@@ -37,26 +42,27 @@ export const AuditTab: React.FC<AuditTabProps> = ({
   const reviewedCount = useMemo(() => auditLogs.filter((r) => r.reviewed).length, [auditLogs]);
   const pendingCount = auditLogs.length - reviewedCount;
 
-  const filteredWithIndex = useMemo(() => {
-    return auditLogs
-      .map((row, originalIndex) => ({ row, originalIndex }))
-      .filter(({ row }) => {
-        if (filterReview === 'PENDING' && row.reviewed) return false;
-        if (filterReview === 'REVIEWED' && !row.reviewed) return false;
-        if (!searchTerm) return true;
-        const term = searchTerm.toLowerCase();
-        return (
-          (row.DBUSERNAME || '').toLowerCase().includes(term) ||
-          (row.ACTION_NAME || '').toLowerCase().includes(term) ||
-          (row.OBJECT_NAME || '').toLowerCase().includes(term) ||
-          (row.FGA_POLICY_NAME || '').toLowerCase().includes(term) ||
-          (row.CLIENT_PROGRAM_NAME || '').toLowerCase().includes(term) ||
-          (row.USERHOST || '').toLowerCase().includes(term) ||
-          (row.SQL_TEXT || '').toLowerCase().includes(term) ||
-          String(row.RETURN_CODE || '').toLowerCase().includes(term)
-        );
-      });
-  }, [auditLogs, searchTerm, filterReview]);
+  const filteredRows = useMemo(() => {
+    return auditLogs.filter((row) => {
+      if (filterReview === 'PENDING' && row.reviewed) return false;
+      if (filterReview === 'REVIEWED' && !row.reviewed) return false;
+      if (!searchTerm) return true;
+      const term = searchTerm.toLowerCase();
+      const redactedSql = redactSensitiveDetails(row.SQL_TEXT, privacyMode, knownUsers).toLowerCase();
+      return (
+        (row.DBUSERNAME || '').toLowerCase().includes(term) ||
+        maskUsername(row.DBUSERNAME, privacyMode).toLowerCase().includes(term) ||
+        (row.ACTION_NAME || '').toLowerCase().includes(term) ||
+        (row.OBJECT_NAME || '').toLowerCase().includes(term) ||
+        (row.FGA_POLICY_NAME || '').toLowerCase().includes(term) ||
+        (row.CLIENT_PROGRAM_NAME || '').toLowerCase().includes(term) ||
+        (row.USERHOST || '').toLowerCase().includes(term) ||
+        (row.SQL_TEXT || '').toLowerCase().includes(term) ||
+        redactedSql.includes(term) ||
+        String(row.RETURN_CODE || '').toLowerCase().includes(term)
+      );
+    });
+  }, [auditLogs, searchTerm, filterReview, privacyMode, knownUsers]);
 
   return (
     <div className="space-y-4">
@@ -153,7 +159,7 @@ export const AuditTab: React.FC<AuditTabProps> = ({
       {/* Main Audit Trail Table */}
       <section className="bg-[var(--surface)] border border-[var(--line)] rounded-xl overflow-hidden transition-colors">
         <div className="overflow-x-auto">
-          {filteredWithIndex.length === 0 ? (
+          {filteredRows.length === 0 ? (
             <div className="py-12 text-center text-[var(--text-3)] flex flex-col items-center gap-2 text-xs">
               <CheckCircle2 className="w-8 h-8 text-[var(--ok)]" />
               <span>Không có bản ghi kiểm toán nào khớp bộ lọc.</span>
@@ -174,17 +180,19 @@ export const AuditTab: React.FC<AuditTabProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--line)]">
-                {filteredWithIndex.map(({ row: r, originalIndex }) => {
+                {filteredRows.map((r, idx) => {
+                  const key = getAuditKey(r);
                   const code = Number(r.RETURN_CODE || 0);
                   const isTrap = String(r.FGA_POLICY_NAME || '').includes('HONEYTOKEN');
                   const objFull =
                     r.OBJECT_SCHEMA && r.OBJECT_NAME
                       ? `${r.OBJECT_SCHEMA}.${r.OBJECT_NAME}`
                       : r.OBJECT_NAME || '—';
+                  const redactedSql = redactSensitiveDetails(r.SQL_TEXT, privacyMode, knownUsers);
 
                   return (
                     <tr
-                      key={`${r.EVENT_TIMESTAMP}-${r.DBUSERNAME}-${originalIndex}`}
+                      key={`${key}-${idx}`}
                       onClick={() => onOpenAuditModal(r)}
                       className={`hover:bg-[var(--surface-hover)] transition-colors cursor-pointer group ${
                         isTrap ? 'bg-[var(--danger-soft)]/20' : ''
@@ -194,7 +202,7 @@ export const AuditTab: React.FC<AuditTabProps> = ({
                       <td className="py-2.5 px-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
-                          onClick={() => onToggleReviewAudit(originalIndex)}
+                          onClick={() => onToggleReviewAudit(key)}
                           aria-label={r.reviewed ? 'Bỏ đánh dấu đã duyệt' : 'Đánh dấu đã duyệt'}
                           className={`w-6 h-6 rounded flex items-center justify-center transition-colors cursor-pointer focus-visible:ring mx-auto ${
                             r.reviewed
@@ -213,7 +221,7 @@ export const AuditTab: React.FC<AuditTabProps> = ({
 
                       {/* User */}
                       <td className="py-2.5 px-3.5 font-mono font-semibold text-[var(--text-1)] whitespace-nowrap">
-                        {r.DBUSERNAME}
+                        {maskUsername(r.DBUSERNAME, privacyMode)}
                       </td>
 
                       {/* Policy / Audit Type */}
@@ -236,8 +244,8 @@ export const AuditTab: React.FC<AuditTabProps> = ({
                       {/* SQL Text (Truncated) */}
                       <td className="py-2.5 px-3.5 max-w-[280px]">
                         {r.SQL_TEXT ? (
-                          <span className="soc-sql-chip truncate block" title={r.SQL_TEXT}>
-                            {r.SQL_TEXT}
+                          <span className="soc-sql-chip truncate block" title={redactedSql}>
+                            {redactedSql}
                           </span>
                         ) : (
                           <span className="text-[var(--text-3)] font-mono">—</span>
@@ -265,7 +273,7 @@ export const AuditTab: React.FC<AuditTabProps> = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => onClearSingleAudit(originalIndex)}
+                            onClick={() => onClearSingleAudit(key)}
                             className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] transition-colors cursor-pointer focus-visible:ring"
                             title="Xóa bản ghi này"
                             aria-label="Xóa bản ghi"

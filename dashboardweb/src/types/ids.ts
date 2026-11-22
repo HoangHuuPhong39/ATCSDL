@@ -74,6 +74,7 @@ export interface DbUser {
 
 export interface Employee {
   MANV: string;
+  CHUCVU?: string;
   HOTEN: string;
   LUONG: number;
   GIOITINH: string;
@@ -108,3 +109,57 @@ export type ActiveTab =
   | 'users' 
   | 'ips' 
   | 'docs';
+
+export type DataSourceMode = 'oracle_live' | 'simulation' | 'disconnected';
+
+export interface DefenseHealth {
+  trigger_ok: boolean;
+  fga_ok: boolean;
+  audit_ok: boolean;
+  crypto_policy_ok: boolean;
+  errors: string[];
+}
+
+export interface CommandAck {
+  command_id: string;
+  ok: boolean;
+  message?: string;
+}
+
+export interface AuthStatus {
+  authenticated: boolean;
+  csrfToken?: string;
+}
+
+export interface DashboardApiResponse {
+  ok: boolean;
+  timestamp: string;
+  dsn: string;
+  oracle_bridge_connected: boolean;
+  last_oracle_sync: string | null;
+  data_source: DataSourceMode;
+  active_mode: DataSourceMode;
+  auto_response: boolean;
+  defense_health?: DefenseHealth;
+  metrics: Metrics;
+  users: DbUser[];
+  alerts: AlertItem[];
+  fga_events: FgaEvent[];
+  triggers: TriggerAlert[];
+  audit_logs: AuditLogRow[];
+  failed_logons?: FailedLogon[];
+  employees: Employee[];
+  error?: string;
+}
+
+export function getFgaKey(
+  f: Pick<FgaEvent, 'EVENT_TIMESTAMP' | 'DBUSERNAME' | 'FGA_POLICY_NAME' | 'SQL_TEXT'>
+): string {
+  return `${f.EVENT_TIMESTAMP}_${f.DBUSERNAME}_${f.FGA_POLICY_NAME}_${f.SQL_TEXT || ''}`;
+}
+
+export function getAuditKey(
+  r: Pick<AuditLogRow, 'EVENT_TIMESTAMP' | 'DBUSERNAME' | 'ACTION_NAME' | 'SQL_TEXT'>
+): string {
+  return `${r.EVENT_TIMESTAMP}_${r.DBUSERNAME}_${r.ACTION_NAME}_${(r.SQL_TEXT || '').slice(0, 40)}`;
+}

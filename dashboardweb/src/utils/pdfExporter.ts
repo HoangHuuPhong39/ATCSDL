@@ -4,7 +4,7 @@ import {
   maskOsUser,
   maskHost,
   maskContextString,
-  sanitizeSqlCredentials,
+  redactSensitiveDetails,
 } from './privacy';
 import { classifyAlertGroup, computeAttackBreakdown } from './analytics';
 
@@ -124,6 +124,7 @@ export function buildPdfReportModel(
   });
 
   const breakdown = computeAttackBreakdown(filteredAlerts);
+  const knownUsers = data.users.map((u) => u.USERNAME);
 
   const alertRows: PdfAlertRowModel[] =
     scope === 'audit'
@@ -139,7 +140,7 @@ export function buildPdfReportModel(
             riskScore: `${a.risk_score}/100`,
             status: a.reviewed ? 'ĐÃ DUYỆT' : 'CHỜ DUYỆT',
             attackType: a.attack_type,
-            sqlDetails: sanitizeSqlCredentials(a.details),
+            sqlDetails: redactSensitiveDetails(a.details, privacyMode, knownUsers),
             context: maskContextString(a.context, privacyMode),
           };
         });
@@ -165,7 +166,7 @@ export function buildPdfReportModel(
             returnCode: code === 0 ? '0 (OK)' : `ORA-${code}`,
             status: r.reviewed ? 'ĐÃ DUYỆT' : 'CHỜ DUYỆT',
             context: `${r.CLIENT_PROGRAM_NAME || 'Client'} (${rawOs}@${rawHost})`,
-            sqlText: sanitizeSqlCredentials(r.SQL_TEXT || '—'),
+            sqlText: r.SQL_TEXT ? redactSensitiveDetails(r.SQL_TEXT, privacyMode, knownUsers) : '—',
           };
         });
 
@@ -401,6 +402,15 @@ export function renderPdfReportPages(model: PdfReportModel): {
     }
     currentCommands = [];
 
+    const headerMetaLines = isFirstPage
+      ? wrapTextByChars(
+          `Mã hồ sơ: ${model.reportCode}   |   Thời gian xuất: ${model.generatedAt}   |   Người lập: ${model.auditorName}`,
+          125
+        ).slice(0, 3)
+      : [];
+    const extraHeaderH = isFirstPage ? Math.max(0, headerMetaLines.length - 1) * 18 : 0;
+    const headerH = isFirstPage ? 150 + extraHeaderH : 92;
+
     // Page background & top banner
     currentCommands.push((ctx) => {
       ctx.fillStyle = '#ffffff';
@@ -408,11 +418,11 @@ export function renderPdfReportPages(model: PdfReportModel): {
 
       // Top dark navy header bar
       ctx.fillStyle = '#0c1629';
-      ctx.fillRect(0, 0, WIDTH, isFirstPage ? 150 : 92);
+      ctx.fillRect(0, 0, WIDTH, headerH);
 
       // Accent sky stripe
       ctx.fillStyle = '#0284c7';
-      ctx.fillRect(0, isFirstPage ? 150 : 92, WIDTH, 4);
+      ctx.fillRect(0, headerH, WIDTH, 4);
 
       // Header text
       ctx.fillStyle = '#38bdf8';
@@ -447,11 +457,9 @@ export function renderPdfReportPages(model: PdfReportModel): {
 
         ctx.fillStyle = '#94a3b8';
         ctx.font = '13px "JetBrains Mono", monospace';
-        ctx.fillText(
-          `Mã hồ sơ: ${model.reportCode}   |   Thời gian xuất: ${model.generatedAt}   |   Người lập: ${model.auditorName}`,
-          MARGIN_X,
-          134
-        );
+        headerMetaLines.forEach((line, lIdx) => {
+          ctx.fillText(line, MARGIN_X, 134 + lIdx * 18);
+        });
       } else {
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 18px Inter, system-ui, sans-serif';
@@ -462,13 +470,15 @@ export function renderPdfReportPages(model: PdfReportModel): {
       }
     });
 
-    cursorY = isFirstPage ? 182 : 124;
+    cursorY = isFirstPage ? headerH + 32 : 124;
   };
 
-  const ensureSpace = (neededHeight: number) => {
+  const ensureSpace = (neededHeight: number): boolean => {
     if (cursorY + neededHeight > HEIGHT - 110) {
       startNewPage(false);
+      return true;
     }
+    return false;
   };
 
   // Start Page 1
@@ -544,19 +554,39 @@ export function renderPdfReportPages(model: PdfReportModel): {
 
   // Notes bar
   if (model.notes) {
+    const noteLines = wrapTextByChars(`Ghi chú hồ sơ: ${model.notes}`, 110);
+    const noteBoxH = Math.max(38, 18 + noteLines.length * 18);
+    ensureSpace(noteBoxH + 14);
     const noteY = cursorY;
     currentCommands.push((ctx) => {
       ctx.fillStyle = '#f1f5f9';
-      ctx.fillRect(MARGIN_X, noteY, CONTENT_W, 38);
+      ctx.fillRect(MARGIN_X, noteY, CONTENT_W, noteBoxH);
       ctx.fillStyle = '#334155';
       ctx.font = 'italic 13px Inter, system-ui, sans-serif';
-      ctx.fillText(`Ghi chú hồ sơ: ${model.notes.slice(0, 125)}`, MARGIN_X + 14, noteY + 24);
+      noteLines.forEach((line, lIdx) => {
+        ctx.fillText(line, MARGIN_X + 14, noteY + 23 + lIdx * 18);
+      });
     });
-    cursorY += 52;
+    cursorY += noteBoxH + 14;
   }
 
   // 2. User Posture Table (if scope === 'full')
   if (model.scope === 'full' && model.users.length > 0) {
+    const drawUserTableHeader = (thY: number) => {
+      currentCommands.push((ctx) => {
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(MARGIN_X, thY, CONTENT_W, 32);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 13px Inter, system-ui, sans-serif';
+        ctx.fillText('Tài khoản CSDL', MARGIN_X + 16, thY + 21);
+        ctx.fillText('Mật khẩu (SYS.USER$)', MARGIN_X + 180, thY + 21);
+        ctx.fillText('Điểm Rủi ro', MARGIN_X + 380, thY + 21);
+        ctx.fillText('Cấp độ Phản ứng IPS', MARGIN_X + 520, thY + 21);
+        ctx.fillText('Chế độ Quyền DML', MARGIN_X + 830, thY + 21);
+        ctx.fillText('Trạng thái', MARGIN_X + 995, thY + 21);
+      });
+    };
+
     ensureSpace(190);
     const secY = cursorY;
     currentCommands.push((ctx) => {
@@ -567,23 +597,17 @@ export function renderPdfReportPages(model: PdfReportModel): {
         MARGIN_X,
         secY + 20
       );
-
-      // Table Header
-      const thY = secY + 32;
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(MARGIN_X, thY, CONTENT_W, 32);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 13px Inter, system-ui, sans-serif';
-      ctx.fillText('Tài khoản CSDL', MARGIN_X + 16, thY + 21);
-      ctx.fillText('Mật khẩu (SYS.USER$)', MARGIN_X + 180, thY + 21);
-      ctx.fillText('Điểm Rủi ro', MARGIN_X + 380, thY + 21);
-      ctx.fillText('Cấp độ Phản ứng IPS', MARGIN_X + 520, thY + 21);
-      ctx.fillText('Chế độ Quyền DML', MARGIN_X + 830, thY + 21);
-      ctx.fillText('Trạng thái', MARGIN_X + 995, thY + 21);
     });
+    drawUserTableHeader(secY + 32);
     cursorY += 64;
 
     model.users.forEach((u, idx) => {
+      const prevY = cursorY;
+      const broke = ensureSpace(32);
+      if (broke || cursorY < prevY) {
+        drawUserTableHeader(cursorY);
+        cursorY += 32;
+      }
       const rowY = cursorY;
       currentCommands.push((ctx) => {
         ctx.fillStyle = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
@@ -622,6 +646,20 @@ export function renderPdfReportPages(model: PdfReportModel): {
 
   // 3. Alerts Section (if scope === 'full' or 'alerts')
   if (model.scope === 'full' || model.scope === 'alerts') {
+    const drawAlertsTableHeader = (thY: number) => {
+      currentCommands.push((ctx) => {
+        ctx.fillStyle = '#7f1d1d';
+        ctx.fillRect(MARGIN_X, thY, CONTENT_W, 34);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12.5px Inter, system-ui, sans-serif';
+        ctx.fillText('#', MARGIN_X + 12, thY + 22);
+        ctx.fillText('Thời gian / User', MARGIN_X + 46, thY + 22);
+        ctx.fillText('Mức độ / Nhóm', MARGIN_X + 220, thY + 22);
+        ctx.fillText('Loại Tấn công & Câu lệnh SQL Vi phạm', MARGIN_X + 385, thY + 22);
+        ctx.fillText('Trạng thái', MARGIN_X + 995, thY + 22);
+      });
+    };
+
     ensureSpace(120);
     const secTitleY = cursorY;
     const sectionPrefix = model.scope === 'full' ? 'III.' : 'II.';
@@ -633,18 +671,8 @@ export function renderPdfReportPages(model: PdfReportModel): {
         MARGIN_X,
         secTitleY + 20
       );
-
-      const thY = secTitleY + 32;
-      ctx.fillStyle = '#7f1d1d';
-      ctx.fillRect(MARGIN_X, thY, CONTENT_W, 34);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 12.5px Inter, system-ui, sans-serif';
-      ctx.fillText('#', MARGIN_X + 12, thY + 22);
-      ctx.fillText('Thời gian / User', MARGIN_X + 46, thY + 22);
-      ctx.fillText('Mức độ / Nhóm', MARGIN_X + 220, thY + 22);
-      ctx.fillText('Loại Tấn công & Câu lệnh SQL Vi phạm', MARGIN_X + 385, thY + 22);
-      ctx.fillText('Trạng thái', MARGIN_X + 995, thY + 22);
     });
+    drawAlertsTableHeader(secTitleY + 32);
     cursorY += 66;
 
     if (model.alertRows.length === 0) {
@@ -663,7 +691,12 @@ export function renderPdfReportPages(model: PdfReportModel): {
       model.alertRows.forEach((row, idx) => {
         const sqlLines = wrapTextByChars(row.sqlDetails, 74).slice(0, 2);
         const rowH = Math.max(58, 38 + sqlLines.length * 18);
-        ensureSpace(rowH + 10);
+        const prevY = cursorY;
+        const broke = ensureSpace(rowH + 10);
+        if (broke || cursorY < prevY) {
+          drawAlertsTableHeader(cursorY);
+          cursorY += 34;
+        }
         const rY = cursorY;
 
         currentCommands.push((ctx) => {
@@ -724,6 +757,20 @@ export function renderPdfReportPages(model: PdfReportModel): {
 
   // 4. Audit Logs Section (if scope === 'full' or 'audit')
   if (model.scope === 'full' || model.scope === 'audit') {
+    const drawAuditTableHeader = (thY: number) => {
+      currentCommands.push((ctx) => {
+        ctx.fillStyle = '#0c4a6e';
+        ctx.fillRect(MARGIN_X, thY, CONTENT_W, 34);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12.5px Inter, system-ui, sans-serif';
+        ctx.fillText('#', MARGIN_X + 12, thY + 22);
+        ctx.fillText('Thời gian / DB User', MARGIN_X + 46, thY + 22);
+        ctx.fillText('Policy / Action / Mã ORA', MARGIN_X + 225, thY + 22);
+        ctx.fillText('Ngữ cảnh & Câu lệnh SQL (SQL_TEXT)', MARGIN_X + 445, thY + 22);
+        ctx.fillText('Trạng thái', MARGIN_X + 995, thY + 22);
+      });
+    };
+
     ensureSpace(120);
     const secTitleY = cursorY;
     const sectionPrefix = model.scope === 'full' ? 'IV.' : 'II.';
@@ -735,18 +782,8 @@ export function renderPdfReportPages(model: PdfReportModel): {
         MARGIN_X,
         secTitleY + 20
       );
-
-      const thY = secTitleY + 32;
-      ctx.fillStyle = '#0c4a6e';
-      ctx.fillRect(MARGIN_X, thY, CONTENT_W, 34);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 12.5px Inter, system-ui, sans-serif';
-      ctx.fillText('#', MARGIN_X + 12, thY + 22);
-      ctx.fillText('Thời gian / DB User', MARGIN_X + 46, thY + 22);
-      ctx.fillText('Policy / Action / Mã ORA', MARGIN_X + 225, thY + 22);
-      ctx.fillText('Ngữ cảnh & Câu lệnh SQL (SQL_TEXT)', MARGIN_X + 445, thY + 22);
-      ctx.fillText('Trạng thái', MARGIN_X + 995, thY + 22);
     });
+    drawAuditTableHeader(secTitleY + 32);
     cursorY += 66;
 
     if (model.auditRows.length === 0) {
@@ -765,7 +802,12 @@ export function renderPdfReportPages(model: PdfReportModel): {
       model.auditRows.forEach((row, idx) => {
         const sqlLines = wrapTextByChars(row.sqlText, 66).slice(0, 2);
         const rowH = Math.max(58, 38 + sqlLines.length * 18);
-        ensureSpace(rowH + 10);
+        const prevY = cursorY;
+        const broke = ensureSpace(rowH + 10);
+        if (broke || cursorY < prevY) {
+          drawAuditTableHeader(cursorY);
+          cursorY += 34;
+        }
         const rY = cursorY;
 
         currentCommands.push((ctx) => {
@@ -797,9 +839,11 @@ export function renderPdfReportPages(model: PdfReportModel): {
           ctx.fillText(`${row.policyOrType.slice(0, 18)} · ${row.returnCode}`, MARGIN_X + 225, rY + 42);
 
           // Context & SQL_TEXT
+          const safeContext =
+            row.context.length > 42 ? `${row.context.slice(0, 39)}...` : row.context;
           ctx.fillStyle = '#475569';
           ctx.font = '12px Inter, system-ui, sans-serif';
-          ctx.fillText(`Ngữ cảnh: ${row.context}`, MARGIN_X + 445, rY + 22);
+          ctx.fillText(`Ngữ cảnh: ${safeContext}`, MARGIN_X + 445, rY + 22);
 
           ctx.fillStyle = '#0369a1';
           ctx.font = '12px "JetBrains Mono", monospace';
@@ -820,14 +864,16 @@ export function renderPdfReportPages(model: PdfReportModel): {
   }
 
   // 5. Signature & Archival Certification Block at the end of the report
-  ensureSpace(150);
+  const auditorLines = wrapTextByChars(model.auditorName, 30).slice(0, 3);
+  const sigBoxH = Math.max(118, 84 + auditorLines.length * 18);
+  ensureSpace(sigBoxH + 32);
   const sigY = cursorY + 10;
   currentCommands.push((ctx) => {
     ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(MARGIN_X, sigY, CONTENT_W, 118);
+    ctx.fillRect(MARGIN_X, sigY, CONTENT_W, sigBoxH);
     ctx.strokeStyle = '#94a3b8';
     ctx.setLineDash([5, 4]);
-    ctx.strokeRect(MARGIN_X, sigY, CONTENT_W, 118);
+    ctx.strokeRect(MARGIN_X, sigY, CONTENT_W, sigBoxH);
     ctx.setLineDash([]);
 
     ctx.fillStyle = '#0f172a';
@@ -862,10 +908,12 @@ export function renderPdfReportPages(model: PdfReportModel): {
     ctx.fillText('CHỮ KÝ KIỂM TOÁN VIÊN SOC', WIDTH - MARGIN_X - 260, sigY + 32);
     ctx.fillStyle = '#0f172a';
     ctx.font = 'bold 14px Inter, system-ui, sans-serif';
-    ctx.fillText(model.auditorName, WIDTH - MARGIN_X - 260, sigY + 66);
+    auditorLines.forEach((line, lIdx) => {
+      ctx.fillText(line, WIDTH - MARGIN_X - 260, sigY + 58 + lIdx * 18);
+    });
     ctx.fillStyle = '#059669';
     ctx.font = 'bold 12px "JetBrains Mono", monospace';
-    ctx.fillText(`[VERIFIED · ${model.generatedAt}]`, WIDTH - MARGIN_X - 260, sigY + 94);
+    ctx.fillText(`[VERIFIED · ${model.generatedAt}]`, WIDTH - MARGIN_X - 260, sigY + 66 + auditorLines.length * 18);
   });
 
   if (currentCommands.length > 0) {
@@ -921,11 +969,12 @@ export function renderPdfReportPages(model: PdfReportModel): {
  * Triggers a direct browser download of the generated PDF file without opening popups.
  */
 export function triggerPdfDownload(pdfBytes: Uint8Array, filename: string): void {
+  const safeName = (filename || 'SOC-REPORT.pdf').replace(/[^A-Za-z0-9._-]/g, '_');
   const blob = new Blob([pdfBytes as unknown as BlobPart], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+  link.download = safeName.endsWith('.pdf') ? safeName : `${safeName}.pdf`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

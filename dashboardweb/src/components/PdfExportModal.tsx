@@ -42,6 +42,13 @@ interface PdfExportModalProps {
   onExportSuccess: (filename: string, pageCount: number, scope: PdfExportScope) => void;
 }
 
+function formatLocalDateStamp(date: Date = new Date()): string {
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  return `${yyyy}${mm}${dd}`;
+}
+
 export const PdfExportModal: React.FC<PdfExportModalProps> = ({
   isOpen,
   onClose,
@@ -60,12 +67,17 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
   const [pdfPrivacyMode, setPdfPrivacyMode] = useState<boolean>(defaultPrivacyMode);
   const [auditorName, setAuditorName] = useState<string>('Quản trị viên An ninh CSDL (SOC / DBA)');
   const [reportCode, setReportCode] = useState<string>(
-    `SOC-ORA23AI-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`
+    () => `SOC-ORA23AI-${formatLocalDateStamp()}`
   );
   const [notes, setNotes] = useState<string>(
     'Hồ sơ lưu trữ cảnh báo xâm nhập và nhật ký kiểm toán phục vụ báo cáo an toàn CSDL Oracle 23ai.'
   );
   const [previewPageIndex, setPreviewPageIndex] = useState<number>(0);
+  const [renderedPdf, setRenderedPdf] = useState<{
+    pageDataUrls: string[];
+    pdfBytes: Uint8Array;
+  }>({ pageDataUrls: [], pdfBytes: new Uint8Array() });
+  const [isRenderingPreview, setIsRenderingPreview] = useState<boolean>(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -118,11 +130,20 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
     notes,
   ]);
 
-  const renderedPdf = useMemo(() => {
+  useEffect(() => {
     if (!isOpen || typeof document === 'undefined') {
-      return { pageDataUrls: [], pdfBytes: new Uint8Array() };
+      setRenderedPdf({ pageDataUrls: [], pdfBytes: new Uint8Array() });
+      setIsRenderingPreview(false);
+      return;
     }
-    return renderPdfReportPages(reportModel);
+
+    setIsRenderingPreview(true);
+    const timer = setTimeout(() => {
+      setRenderedPdf(renderPdfReportPages(reportModel));
+      setIsRenderingPreview(false);
+    }, 250);
+
+    return () => clearTimeout(timer);
   }, [isOpen, reportModel]);
 
   if (!isOpen) return null;
@@ -131,15 +152,20 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
   const safePageIdx = Math.min(previewPageIndex, totalPages - 1);
 
   const handleDownloadPdf = () => {
+    const currentPdf =
+      !isRenderingPreview && renderedPdf.pdfBytes.length > 0
+        ? renderedPdf
+        : renderPdfReportPages(reportModel);
+    const safeReportCode = reportCode.trim().replace(/[^A-Za-z0-9._-]/g, '_') || 'SOC-REPORT';
     const scopeSlug =
       scope === 'alerts'
         ? 'Canh_Bao_IDS'
         : scope === 'audit'
         ? 'Nhat_Ky_Audit_Log'
         : 'Ho_So_Tong_Hop_SOC';
-    const filename = `${reportCode}_${scopeSlug}.pdf`;
-    triggerPdfDownload(renderedPdf.pdfBytes, filename);
-    onExportSuccess(filename, totalPages, scope);
+    const filename = `${safeReportCode}_${scopeSlug}.pdf`;
+    triggerPdfDownload(currentPdf.pdfBytes, filename);
+    onExportSuccess(filename, Math.max(1, currentPdf.pageDataUrls.length), scope);
   };
 
   return (
@@ -197,7 +223,7 @@ export const PdfExportModal: React.FC<PdfExportModalProps> = ({
                         Hồ sơ bảo mật tổng hợp (Full SOC Report)
                       </div>
                       <div className="text-xs text-[var(--text-3)] mt-0.5">
-                        Tóm tắt KPI, 4 User, Cảnh báo ({reportModel.summary.totalAlerts}) &amp; Kiểm toán ({reportModel.summary.totalAuditLogs})
+                        Tóm tắt KPI, {users.length} User, Cảnh báo ({reportModel.summary.totalAlerts}) &amp; Kiểm toán ({reportModel.summary.totalAuditLogs})
                       </div>
                     </div>
                   </div>

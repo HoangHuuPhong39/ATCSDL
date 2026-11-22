@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, Copy, Check, FileCode, ShieldAlert, CheckCircle2, Trash2, Unlock, Lock, ShieldCheck } from 'lucide-react';
 import { AlertItem, AuditLogRow, DbUser } from '../types/ids';
-import { maskUsername } from '../utils/privacy';
+import {
+  maskUsername,
+  maskOsUser,
+  maskHost,
+  maskContextString,
+  redactSensitiveDetails,
+} from '../utils/privacy';
 
 interface AuditModalProps {
   isOpen: boolean;
@@ -42,22 +48,20 @@ export const AuditModal: React.FC<AuditModalProps> = ({
   if (!isOpen || (!alertItem && !auditRow)) return null;
 
   const sqlContent = alertItem?.details || auditRow?.SQL_TEXT || '';
+  const knownUsers = users.map((u) => u.USERNAME);
+  const displaySql = redactSensitiveDetails(sqlContent, privacyMode, knownUsers);
 
   const handleCopySql = () => {
-    if (!sqlContent) return;
-    navigator.clipboard.writeText(sqlContent);
+    if (!displaySql) return;
+    navigator.clipboard.writeText(displaySql);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const isAlert = !!alertItem;
-  const displayedUser = alertItem?.user || auditRow?.DBUSERNAME || '';
-  const matchedUser = users.find(
-    (u) =>
-      u.USERNAME === displayedUser ||
-      maskUsername(u.USERNAME, true) === displayedUser ||
-      maskUsername(u.USERNAME, privacyMode) === displayedUser
-  );
+  const rawUser = alertItem?.user || auditRow?.DBUSERNAME || '';
+  const displayedUser = maskUsername(rawUser, privacyMode);
+  const matchedUser = users.find((u) => u.USERNAME === rawUser);
   const isLocked = matchedUser?.ACCOUNT_STATUS.toUpperCase().includes('LOCK');
   const isReadOnly = matchedUser?.DML_STATUS.toUpperCase() === 'READ-ONLY';
 
@@ -111,7 +115,7 @@ export const AuditModal: React.FC<AuditModalProps> = ({
               </div>
               <div className="bg-[var(--surface-subtle)] border border-white/5 rounded-lg p-2.5">
                 <div className="text-xs font-bold uppercase text-slate-400 mb-1">Tài khoản CSDL vi phạm</div>
-                <div className="font-bold text-sky-300 font-mono">{alertItem.user}</div>
+                <div className="font-bold text-sky-300 font-mono">{maskUsername(alertItem.user, privacyMode)}</div>
               </div>
               <div className="bg-[var(--surface-subtle)] border border-white/5 rounded-lg p-2.5">
                 <div className="text-xs font-bold uppercase text-slate-400 mb-1">Mức độ cảnh báo (Severity)</div>
@@ -137,7 +141,7 @@ export const AuditModal: React.FC<AuditModalProps> = ({
               </div>
               <div className="col-span-2 bg-[var(--surface-subtle)] border border-white/5 rounded-lg p-2.5">
                 <div className="text-xs font-bold uppercase text-slate-400 mb-1">Ngữ cảnh kết nối (Client / Host)</div>
-                <div className="font-mono text-slate-300">{alertItem.context || '—'}</div>
+                <div className="font-mono text-slate-300">{maskContextString(alertItem.context, privacyMode)}</div>
               </div>
             </div>
           ) : auditRow ? (
@@ -148,7 +152,7 @@ export const AuditModal: React.FC<AuditModalProps> = ({
               </div>
               <div className="bg-[var(--surface-subtle)] border border-white/5 rounded-lg p-2.5">
                 <div className="text-xs font-bold uppercase text-slate-400 mb-1">Tài khoản CSDL</div>
-                <div className="font-bold text-sky-300 font-mono">{auditRow.DBUSERNAME}</div>
+                <div className="font-bold text-sky-300 font-mono">{maskUsername(auditRow.DBUSERNAME, privacyMode)}</div>
               </div>
               <div className="bg-[var(--surface-subtle)] border border-white/5 rounded-lg p-2.5">
                 <div className="text-xs font-bold uppercase text-slate-400 mb-1">Hành động &amp; Loại Audit</div>
@@ -192,7 +196,7 @@ export const AuditModal: React.FC<AuditModalProps> = ({
               <div className="col-span-2 bg-[var(--surface-subtle)] border border-white/5 rounded-lg p-2.5">
                 <div className="text-xs font-bold uppercase text-slate-400 mb-1">Tài khoản HĐH &amp; Máy trạm</div>
                 <div className="font-mono text-slate-300">
-                  {(auditRow.OS_USERNAME || '—') + ' @ ' + (auditRow.USERHOST || '—')} •{' '}
+                  {maskOsUser(auditRow.OS_USERNAME, privacyMode) + ' @ ' + maskHost(auditRow.USERHOST, privacyMode)} •{' '}
                   <span className="text-sky-400">{auditRow.CLIENT_PROGRAM_NAME || '—'}</span>
                 </div>
               </div>
@@ -210,25 +214,30 @@ export const AuditModal: React.FC<AuditModalProps> = ({
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {isReadOnly ? (
-                  <button
-                    onClick={() => onUserAction(matchedUser.USERNAME, 'grant_dml')}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500/15 border border-sky-500/35 text-sky-300 hover:bg-sky-500/25 text-xs font-semibold cursor-pointer"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>Khôi phục DML</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => onUserAction(matchedUser.USERNAME, 'revoke_dml')}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/35 text-amber-300 hover:bg-amber-500/25 text-xs font-semibold cursor-pointer"
-                  >
-                    <ShieldAlert className="w-3.5 h-3.5" />
-                    <span>Hạ quyền Read-Only</span>
-                  </button>
+                {!isLocked && (
+                  isReadOnly ? (
+                    <button
+                      type="button"
+                      onClick={() => onUserAction(matchedUser.USERNAME, 'grant_dml')}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500/15 border border-sky-500/35 text-sky-300 hover:bg-sky-500/25 text-xs font-semibold cursor-pointer"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Khôi phục DML</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onUserAction(matchedUser.USERNAME, 'revoke_dml')}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/35 text-amber-300 hover:bg-amber-500/25 text-xs font-semibold cursor-pointer"
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5" />
+                      <span>Hạ quyền Read-Only</span>
+                    </button>
+                  )
                 )}
                 {isLocked ? (
                   <button
+                    type="button"
                     onClick={() => onUserAction(matchedUser.USERNAME, 'unlock')}
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 text-xs font-bold cursor-pointer"
                   >
@@ -237,6 +246,7 @@ export const AuditModal: React.FC<AuditModalProps> = ({
                   </button>
                 ) : (
                   <button
+                    type="button"
                     onClick={() => onUserAction(matchedUser.USERNAME, 'lock')}
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500/15 border border-red-500/35 text-red-300 hover:bg-red-500/25 text-xs font-semibold cursor-pointer"
                   >
@@ -255,7 +265,7 @@ export const AuditModal: React.FC<AuditModalProps> = ({
               <span className="text-xs text-sky-400 font-normal">Định dạng chuẩn Oracle</span>
             </div>
             <div className="bg-[var(--surface-subtle)] border border-sky-500/20 rounded-lg p-3.5 font-mono text-[12px] text-sky-300 break-words whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed selection:bg-sky-500/30">
-              {sqlContent || '(Không có thêm chi tiết SQL)'}
+              {displaySql || '(Không có thêm chi tiết SQL)'}
             </div>
           </div>
         </div>

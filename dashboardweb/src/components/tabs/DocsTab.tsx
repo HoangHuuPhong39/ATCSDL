@@ -158,7 +158,7 @@ export const DocsTab: React.FC = () => {
                       <strong>Bản chất:</strong> Tìm cách nâng cao quyền truy cập vượt quá mức được cấp (Vertical/Horizontal Escalation) bằng các lệnh <code className="text-sky-300 font-mono">GRANT DBA</code>, <code className="text-sky-300 font-mono">ALTER USER</code>, <code className="text-sky-300 font-mono">CREATE USER</code> hoặc lạm dụng thủ tục có quyền <code className="text-sky-300 font-mono">DEFINER</code>.
                     </p>
                     <div className="text-xs text-emerald-400 mt-1 font-sans">
-                      → Cơ chế bắt: Chính sách Unified Audit <code className="font-mono text-sky-300">ids_priv_abuse_pol</code> + Autonomous Trigger <code className="font-mono text-sky-300">SYS.TRG_PROTECT_NV</code>.
+                      → Cơ chế bắt: Chính sách Unified Audit <code className="font-mono text-sky-300">ids_priv_abuse_pol</code> + Autonomous Trigger <code className="font-mono text-sky-300">SYS.TRG_PROTECT_NV</code> (<code className="font-mono text-sky-300">ORA-20001 / ORA-20002 / ORA-20004</code>).
                     </div>
                   </div>
 
@@ -171,7 +171,7 @@ export const DocsTab: React.FC = () => {
                       <strong>Bản chất:</strong> Dò quét mật khẩu theo từ điển hoặc vét cạn làm phát sinh liên tiếp các sự kiện đăng nhập thất bại.
                     </p>
                     <div className="text-xs text-emerald-400 mt-1 font-sans">
-                      → Cơ chế bắt: Thống kê chuỗi sự kiện <code className="font-mono text-sky-300">ACTION_NAME = 'LOGON'</code> có <code className="font-mono text-sky-300">RETURN_CODE = 1017</code> (&gt;= 3 lần trong 15 phút).
+                      → Cơ chế bắt: Thống kê chuỗi sự kiện <code className="font-mono text-sky-300">ACTION_NAME = &apos;LOGON&apos;</code> có <code className="font-mono text-sky-300">RETURN_CODE = 1017</code> (&gt;= 3 lần ngoại sinh đạt Score 70 / &gt;= 5 lần nội bộ khóa đạt Score 90 trong 15 phút).
                     </div>
                   </div>
 
@@ -223,7 +223,7 @@ export const DocsTab: React.FC = () => {
                   <div className="bg-[var(--surface-subtle)] border border-amber-500/20 rounded-lg p-3.5">
                     <div className="flex items-center justify-between">
                       <h4 className="font-bold text-slate-100 text-[13px]">3. Tấn công trình theo dõi (Tracker Attack)</h4>
-                      {renderRiskBadge(70, 'Level 2')}
+                      {renderRiskBadge(72, 'Level 2')}
                     </div>
                     <p className="text-[12px] text-slate-400 mt-1">
                       Lách qua cơ chế kiểm soát kích cỡ tập truy vấn (Query-Set-Size Control — khi hệ thống từ chối trả lời các truy vấn có <code className="text-sky-300 font-mono">COUNT &lt; k</code>) bằng cách độn thêm điều kiện phụ (Tracker <code className="text-sky-300 font-mono">T</code>) để chia thành các tập truy vấn lớn hợp lệ rồi trừ cho nhau.
@@ -233,7 +233,7 @@ export const DocsTab: React.FC = () => {
                   <div className="bg-[var(--surface-subtle)] border border-amber-500/20 rounded-lg p-3.5">
                     <div className="flex items-center justify-between">
                       <h4 className="font-bold text-slate-100 text-[13px]">4. Tấn công hệ tuyến tính (Linear System Attack)</h4>
-                      {renderRiskBadge(72, 'Level 2')}
+                      {renderRiskBadge(78, 'Level 2')}
                     </div>
                     <p className="text-[12px] text-slate-400 mt-1">
                       Thiết lập và giải hệ phương trình đại số tuyến tính <code className="text-sky-300 font-mono">A · X = B</code> từ nhiều truy vấn thống kê <code className="text-sky-300 font-mono">SUM</code> trên các tập con chồng lấp để tìm ra toàn bộ dữ liệu lương cá nhân của tất cả nhân viên.
@@ -350,7 +350,7 @@ q4: SELECT SUM(LUONG) FROM SYS.NV WHERE MANV IN ('NV2','NV3','NV4'); -->      x2
                   <div>
                     <h4 className="font-bold text-slate-100 text-[13px]">Internal Database Interception (Autonomous Trigger)</h4>
                     <p className="text-xs text-slate-400 mt-1">
-                      Trigger <code className="text-amber-300 font-mono">SYS.TRG_PROTECT_NV</code> hoạt động ngay bên trong nhân Oracle DBMS, bắt chặn các thao tác gian lận lương &gt; 50% và xóa nhân viên trước khi dữ liệu bị biến đổi vật lý trên đĩa.
+                      Trigger <code className="text-amber-300 font-mono">SYS.TRG_PROTECT_NV</code> hoạt động ngay bên trong nhân Oracle DBMS, bắt chặn xóa nhân viên (<code className="font-mono">ORA-20001</code>), gian lận lương &gt; 50% hoặc Salami Attack tích lũy qua <code className="font-mono text-amber-300">SYS.IDS_SALARY_BASELINES</code> (<code className="font-mono">ORA-20002</code>), và bảo vệ toàn vẹn DML/PII cho <code className="font-mono">MANV, LUONG, CMND, HOTEN</code> (<code className="font-mono">ORA-20004</code>) trước khi dữ liệu bị biến đổi vật lý trên đĩa.
                     </p>
                   </div>
                 </div>
@@ -362,7 +362,7 @@ q4: SELECT SUM(LUONG) FROM SYS.NV WHERE MANV IN ('NV2','NV3','NV4'); -->      x2
                   <div>
                     <h4 className="font-bold text-slate-100 text-[13px]">Fine-Grained Auditing &amp; Bẫy Honeytoken (DBMS_FGA)</h4>
                     <p className="text-xs text-slate-400 mt-1">
-                      Gài bản ghi bẫy <code className="text-red-400 font-mono font-bold">MANV = 'NV_TRAP'</code> và chính sách giám sát cột nhạy cảm <code className="text-purple-300 font-mono">LUONG &gt;= 1000</code>. Chặn đứng các hành vi đọc trộm dữ liệu mà Trigger không thể can thiệp được.
+                      Gài bản ghi bẫy <code className="text-red-400 font-mono font-bold">MANV = &apos;NV_TRAP&apos;</code> kèm handler chặn tức thời <code className="text-red-300 font-mono">SYS.IDS_FGA_TRAP_HANDLER</code> (<code className="font-mono">ORA-20003</code>) và chính sách giám sát cột nhạy cảm <code className="text-purple-300 font-mono">LUONG, CMND</code> trên toàn bộ nhân viên (<code className="text-purple-300 font-mono">audit_condition =&gt; NULL</code>). Chặn đứng các hành vi đọc trộm dữ liệu mà Trigger không thể can thiệp được.
                     </p>
                   </div>
                 </div>
@@ -425,16 +425,16 @@ q4: SELECT SUM(LUONG) FROM SYS.NV WHERE MANV IN ('NV2','NV3','NV4'); -->      x2
                 Đề tài sử dụng chỉ thị <code className="text-amber-300 font-mono font-bold">PRAGMA AUTONOMOUS_TRANSACTION</code>. Chỉ thị này tạo ra một phân vùng giao dịch độc lập hoàn toàn với phiên chính của người dùng:
               </p>
               <ol className="list-decimal pl-5 space-y-1.5 text-slate-300 text-xs">
-                <li>Khi phát hiện vi phạm, Trigger ghi nhận chi tiết vào bảng <code className="text-sky-300 font-mono">SYS.IDS_TRIGGER_ALERTS</code>.</li>
+                <li>Khi phát hiện vi phạm, Trigger ghi nhận chi tiết vào bảng <code className="text-sky-300 font-mono">SYS.IDS_TRIGGER_ALERTS</code> (cột <code className="text-sky-300 font-mono">event_time TIMESTAMP WITH TIME ZONE</code>).</li>
                 <li>Thực thi lệnh <code className="text-emerald-300 font-mono font-bold">COMMIT;</code> ngay trong giao dịch tự trị. Dòng cảnh báo được ghi vĩnh viễn vào CSDL.</li>
-                <li>Sau đó mới gọi <code className="text-red-400 font-mono font-bold">RAISE_APPLICATION_ERROR(-20001 / -20002)</code> để chặn đứng người dùng. Giao dịch chính bị Rollback nhưng log cảnh báo vẫn an toàn 100%.</li>
+                <li>Sau đó mới gọi <code className="text-red-400 font-mono font-bold">RAISE_APPLICATION_ERROR(-20001 / -20002 / -20004)</code> để chặn đứng người dùng (xóa nhân viên, gian lận lương / Salami Attack qua <code className="text-amber-300 font-mono">SYS.IDS_SALARY_BASELINES</code>, hoặc giả mạo toàn vẹn PII <code className="text-sky-300 font-mono">MANV, LUONG, CMND, HOTEN</code>). Giao dịch chính bị Rollback nhưng log cảnh báo vẫn an toàn 100%.</li>
               </ol>
 
               <div className="relative pt-2">
                 <div className="flex items-center justify-between bg-[var(--surface-subtle)] px-3.5 py-2 rounded-t-lg border-x border-t border-white/10">
-                  <span className="text-xs font-mono font-bold text-slate-400">PL/SQL Autonomous Trigger</span>
+                  <span className="text-xs font-mono font-bold text-slate-400">PL/SQL Autonomous Trigger (Salami + PII Integrity)</span>
                   <button
-                    onClick={() => handleCopy('trigger_code', `CREATE OR REPLACE TRIGGER SYS.TRG_PROTECT_NV\nBEFORE UPDATE OR DELETE ON SYSTEM.NV\nFOR EACH ROW\nDECLARE\n    PRAGMA AUTONOMOUS_TRANSACTION;\n    v_user VARCHAR2(50);\nBEGIN\n    v_user := SYS_CONTEXT('USERENV', 'SESSION_USER');\n    IF DELETING THEN\n        INSERT INTO SYS.IDS_TRIGGER_ALERTS (db_user, attack_type, details)\n        VALUES (v_user, 'UNAUTHORIZED_DELETE', 'Cố tình xóa nhân viên mã: ' || :OLD.manv);\n        COMMIT;\n        RAISE_APPLICATION_ERROR(-20001, 'IDS BLOCK: Ban khong duoc phep xoa du lieu nhan vien!');\n    END IF;\n    IF UPDATING('LUONG') AND :NEW.luong > :OLD.luong * 1.5 THEN\n        INSERT INTO SYS.IDS_TRIGGER_ALERTS (db_user, attack_type, details)\n        VALUES (v_user, 'ABNORMAL_SALARY_MODIFICATION', 'Tăng lương bất thường từ ' || :OLD.luong || ' lên ' || :NEW.luong);\n        COMMIT;\n        RAISE_APPLICATION_ERROR(-20002, 'IDS BLOCK: Phat hien hanh vi gian lan tang luong vuot nguong!');\n    END IF;\nEND;`)}
+                    onClick={() => handleCopy('trigger_code', `CREATE OR REPLACE TRIGGER SYS.TRG_PROTECT_NV\nBEFORE INSERT OR UPDATE OR DELETE ON SYSTEM.NV\nFOR EACH ROW\nDECLARE\n    PRAGMA AUTONOMOUS_TRANSACTION;\n    v_user        VARCHAR2(50);\n    v_max_allowed NUMBER(10,2);\nBEGIN\n    v_user := UPPER(SYS_CONTEXT('USERENV', 'SESSION_USER'));\n    IF v_user IN ('SYS', 'SYSTEM') THEN RETURN; END IF;\n    IF DELETING THEN\n        INSERT INTO SYS.IDS_TRIGGER_ALERTS (db_user, attack_type, details)\n        VALUES (v_user, 'UNAUTHORIZED_DELETE', 'Cố tình xóa nhân viên mã: ' || :OLD.manv);\n        COMMIT;\n        RAISE_APPLICATION_ERROR(-20001, 'IDS BLOCK: Ban khong duoc phep xoa du lieu nhan vien!');\n    END IF;\n    IF INSERTING AND (UPPER(TRIM(:NEW.manv)) = 'NV_TRAP' OR :NEW.luong IS NULL OR :NEW.luong <= 0 OR :NEW.luong > 5000) THEN\n        INSERT INTO SYS.IDS_TRIGGER_ALERTS (db_user, attack_type, details)\n        VALUES (v_user, 'UNAUTHORIZED_DML_INTEGRITY', 'Từ chối INSERT vi phạm toàn vẹn dữ liệu: manv=' || NVL(:NEW.manv, 'NULL'));\n        COMMIT;\n        RAISE_APPLICATION_ERROR(-20004, 'IDS BLOCK (ORA-20004): Tu choi INSERT vi pham tinh toan ven du lieu / luong bat thuong!');\n    END IF;\n    IF UPDATING('LUONG') THEN\n        BEGIN\n            SELECT max_allowed_luong INTO v_max_allowed FROM SYS.IDS_SALARY_BASELINES WHERE manv = :OLD.manv;\n        EXCEPTION WHEN NO_DATA_FOUND THEN v_max_allowed := NULL;\n        END;\n        IF :NEW.luong IS NULL OR :NEW.luong <= 0 OR (:OLD.luong IS NOT NULL AND (:NEW.luong > :OLD.luong * 1.5 OR :NEW.luong < :OLD.luong * 0.5)) OR (v_max_allowed IS NOT NULL AND :NEW.luong > v_max_allowed) OR (:OLD.manv <> 'NV_TRAP' AND :NEW.luong > 5000) THEN\n            INSERT INTO SYS.IDS_TRIGGER_ALERTS (db_user, attack_type, details)\n            VALUES (v_user, 'ABNORMAL_SALARY_MODIFICATION', 'Thay đổi lương bất thường từ ' || :OLD.luong || ' lên ' || :NEW.luong);\n            COMMIT;\n            RAISE_APPLICATION_ERROR(-20002, 'IDS BLOCK: Phat hien hanh vi gian lan thay doi luong vuot nguong hoac Salami Attack!');\n        END IF;\n    END IF;\n    IF UPDATING('MANV') AND (:NEW.manv IS NULL OR :NEW.manv <> :OLD.manv) THEN\n        INSERT INTO SYS.IDS_TRIGGER_ALERTS (db_user, attack_type, details)\n        VALUES (v_user, 'UNAUTHORIZED_DML_INTEGRITY', 'Cố tình thay đổi khóa chính MANV từ ' || :OLD.manv || ' thành ' || NVL(:NEW.manv, 'NULL'));\n        COMMIT;\n        RAISE_APPLICATION_ERROR(-20004, 'IDS BLOCK (ORA-20004): Khong duoc phep thay doi ma nhan vien (MANV)!');\n    END IF;\n    IF (UPDATING('CMND') OR UPDATING('HOTEN')) AND (:NEW.cmnd IS NULL OR NVL(LENGTH(TRIM(:NEW.cmnd)),0) < 9 OR :NEW.hoten IS NULL OR NVL(LENGTH(TRIM(:NEW.hoten)),0) < 2 OR NVL(:NEW.cmnd,'~') <> NVL(:OLD.cmnd,'~') OR NVL(:NEW.hoten,'~') <> NVL(:OLD.hoten,'~')) THEN\n        INSERT INTO SYS.IDS_TRIGGER_ALERTS (db_user, attack_type, details)\n        VALUES (v_user, 'UNAUTHORIZED_DML_INTEGRITY', 'Cố tình xóa trắng hoặc giả mạo PII (CMND/HOTEN) của nhân viên mã: ' || :OLD.manv);\n        COMMIT;\n        RAISE_APPLICATION_ERROR(-20004, 'IDS BLOCK (ORA-20004): Khong duoc phep xoa trang hoac gia mao thong tin dinh danh (CMND/HOTEN)!');\n    END IF;\nEND;`)}
                     className="inline-flex items-center gap-1 text-xs text-sky-400 hover:text-white cursor-pointer"
                   >
                     {copiedSnippet === 'trigger_code' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
@@ -443,13 +443,15 @@ q4: SELECT SUM(LUONG) FROM SYS.NV WHERE MANV IN ('NV2','NV3','NV4'); -->      x2
                 </div>
                 <pre className="bg-[var(--surface-subtle)] p-4 rounded-b-lg border border-white/10 font-mono text-xs text-sky-300 overflow-x-auto leading-relaxed">
 {`CREATE OR REPLACE TRIGGER SYS.TRG_PROTECT_NV
-BEFORE UPDATE OR DELETE ON SYSTEM.NV
+BEFORE INSERT OR UPDATE OR DELETE ON SYSTEM.NV
 FOR EACH ROW
 DECLARE
     PRAGMA AUTONOMOUS_TRANSACTION;
-    v_user VARCHAR2(50);
+    v_user        VARCHAR2(50);
+    v_max_allowed NUMBER(10,2);
 BEGIN
-    v_user := SYS_CONTEXT('USERENV', 'SESSION_USER');
+    v_user := UPPER(SYS_CONTEXT('USERENV', 'SESSION_USER'));
+    IF v_user IN ('SYS', 'SYSTEM') THEN RETURN; END IF;
 
     IF DELETING THEN
         INSERT INTO SYS.IDS_TRIGGER_ALERTS (db_user, attack_type, details)
@@ -458,11 +460,52 @@ BEGIN
         RAISE_APPLICATION_ERROR(-20001, 'IDS BLOCK: Ban khong duoc phep xoa du lieu nhan vien!');
     END IF;
 
-    IF UPDATING('LUONG') AND :NEW.luong > :OLD.luong * 1.5 THEN
+    IF INSERTING AND (UPPER(TRIM(:NEW.manv)) = 'NV_TRAP'
+        OR :NEW.luong IS NULL OR :NEW.luong <= 0 OR :NEW.luong > 5000) THEN
         INSERT INTO SYS.IDS_TRIGGER_ALERTS (db_user, attack_type, details)
-        VALUES (v_user, 'ABNORMAL_SALARY_MODIFICATION', 'Tăng lương bất thường từ ' || :OLD.luong || ' lên ' || :NEW.luong);
+        VALUES (v_user, 'UNAUTHORIZED_DML_INTEGRITY',
+                'Từ chối INSERT vi phạm toàn vẹn dữ liệu: manv=' || NVL(:NEW.manv, 'NULL'));
         COMMIT;
-        RAISE_APPLICATION_ERROR(-20002, 'IDS BLOCK: Phat hien hanh vi gian lan tang luong vuot nguong!');
+        RAISE_APPLICATION_ERROR(-20004, 'IDS BLOCK (ORA-20004): Tu choi INSERT vi pham tinh toan ven du lieu / luong bat thuong!');
+    END IF;
+
+    IF UPDATING('LUONG') THEN
+        BEGIN
+            SELECT max_allowed_luong INTO v_max_allowed
+            FROM SYS.IDS_SALARY_BASELINES WHERE manv = :OLD.manv;
+        EXCEPTION WHEN NO_DATA_FOUND THEN v_max_allowed := NULL;
+        END;
+
+        IF :NEW.luong IS NULL OR :NEW.luong <= 0
+           OR (:OLD.luong IS NOT NULL AND (:NEW.luong > :OLD.luong * 1.5 OR :NEW.luong < :OLD.luong * 0.5))
+           OR (v_max_allowed IS NOT NULL AND :NEW.luong > v_max_allowed)
+           OR (:OLD.manv <> 'NV_TRAP' AND :NEW.luong > 5000) THEN
+            INSERT INTO SYS.IDS_TRIGGER_ALERTS (db_user, attack_type, details)
+            VALUES (v_user, 'ABNORMAL_SALARY_MODIFICATION',
+                    'Thay đổi lương bất thường từ ' || :OLD.luong || ' lên ' || :NEW.luong);
+            COMMIT;
+            RAISE_APPLICATION_ERROR(-20002, 'IDS BLOCK: Phat hien hanh vi gian lan thay doi luong vuot nguong hoac Salami Attack!');
+        END IF;
+    END IF;
+
+    IF UPDATING('MANV') AND (:NEW.manv IS NULL OR :NEW.manv <> :OLD.manv) THEN
+        INSERT INTO SYS.IDS_TRIGGER_ALERTS (db_user, attack_type, details)
+        VALUES (v_user, 'UNAUTHORIZED_DML_INTEGRITY', 'Cố tình thay đổi khóa chính MANV từ ' || :OLD.manv);
+        COMMIT;
+        RAISE_APPLICATION_ERROR(-20004, 'IDS BLOCK (ORA-20004): Khong duoc phep thay doi ma nhan vien (MANV)!');
+    END IF;
+
+    IF (UPDATING('CMND') OR UPDATING('HOTEN')) AND (
+        :NEW.cmnd IS NULL OR NVL(LENGTH(TRIM(:NEW.cmnd)), 0) < 9
+        OR :NEW.hoten IS NULL OR NVL(LENGTH(TRIM(:NEW.hoten)), 0) < 2
+        OR NVL(:NEW.cmnd, '~') <> NVL(:OLD.cmnd, '~')
+        OR NVL(:NEW.hoten, '~') <> NVL(:OLD.hoten, '~')
+    ) THEN
+        INSERT INTO SYS.IDS_TRIGGER_ALERTS (db_user, attack_type, details)
+        VALUES (v_user, 'UNAUTHORIZED_DML_INTEGRITY',
+                'Cố tình xóa trắng hoặc giả mạo PII (CMND/HOTEN) của nhân viên mã: ' || :OLD.manv);
+        COMMIT;
+        RAISE_APPLICATION_ERROR(-20004, 'IDS BLOCK (ORA-20004): Khong duoc phep xoa trang hoac gia mao thong tin dinh danh (CMND/HOTEN)!');
     END IF;
 END;`}
                 </pre>
@@ -500,7 +543,7 @@ END;`}
 
               <h3 className="font-bold text-slate-100 text-[14px] pt-1">Cấu hình DBMS_FGA:</h3>
               <pre className="bg-[var(--surface-subtle)] p-3.5 rounded-lg border border-white/10 font-mono text-xs text-purple-300 overflow-x-auto leading-relaxed">
-{`-- 1. Bẫy Honeytoken (Toàn bộ thao tác chạm vào MANV = 'NV_TRAP')
+{`-- 1. Bẫy Honeytoken (Chặn tức thời ORA-20003 mọi thao tác chạm MANV = 'NV_TRAP')
 BEGIN
     DBMS_FGA.ADD_POLICY(
         object_schema   => 'SYSTEM',
@@ -508,21 +551,24 @@ BEGIN
         policy_name     => 'FGA_HONEYTOKEN_TRAP',
         audit_condition => 'manv = ''NV_TRAP''',
         audit_column    => NULL,
+        handler_schema  => 'SYS',
+        handler_module  => 'IDS_FGA_TRAP_HANDLER',
         statement_types => 'SELECT, UPDATE, DELETE',
         enable          => TRUE
     );
 END;
 
--- 2. Giám sát cột nhạy cảm lương cao
+-- 2. Giám sát cột nhạy cảm LUONG, CMND trên toàn bộ nhân viên (audit_condition => NULL)
 BEGIN
     DBMS_FGA.ADD_POLICY(
-        object_schema   => 'SYSTEM',
-        object_name     => 'NV',
-        policy_name     => 'FGA_HIGH_SALARY_ACCESS',
-        audit_condition => 'luong >= 1000',
-        audit_column    => 'LUONG, CMND',
-        statement_types => 'SELECT, UPDATE, DELETE',
-        enable          => TRUE
+        object_schema     => 'SYSTEM',
+        object_name       => 'NV',
+        policy_name       => 'FGA_HIGH_SALARY_ACCESS',
+        audit_condition   => NULL,
+        audit_column      => 'LUONG, CMND',
+        statement_types   => 'SELECT, UPDATE, DELETE',
+        enable            => TRUE,
+        audit_column_opts => DBMS_FGA.ANY_COLUMNS
     );
 END;`}
               </pre>
@@ -560,15 +606,15 @@ END;`}
                   <ul className="list-disc pl-5 text-xs text-slate-300 mt-1 space-y-1">
                     <li><strong>Direct Attack (Score 95):</strong> Chạm trực tiếp bẫy <code className="font-mono text-red-300">FGA_HONEYTOKEN_TRAP</code> hoặc truy xuất trực tiếp cá nhân.</li>
                     <li><strong>Count-based Attack (Score 65):</strong> Truy vấn kết hợp <code className="font-mono text-sky-300">COUNT(*)</code> và <code className="font-mono text-sky-300">SUM/AVG</code> trên điều kiện lọc hẹp để cô lập <code className="font-mono">COUNT = 1</code>.</li>
-                    <li><strong>Tracker Attack (Score 70):</strong> Chuỗi truy vấn thống kê sử dụng mệnh đề phần bù <code className="font-mono text-sky-300">(C OR T)</code> và <code className="font-mono text-sky-300">(NOT C AND T)</code> để lách kiểm soát kích thước tập kết quả.</li>
-                    <li><strong>Linear System Attack (Score 72):</strong> Chuỗi <code className="font-mono text-sky-300">&gt;= 3 truy vấn SUM/AVG</code> trên các tập con <code className="font-mono text-sky-300">IN (...)</code> khác nhau nhằm lập hệ phương trình tuyến tính <code className="font-mono">A · X = B</code>.</li>
+                    <li><strong>Tracker Attack (Score 72):</strong> Chuỗi truy vấn thống kê sử dụng mệnh đề phần bù <code className="font-mono text-sky-300">(C OR T)</code> và <code className="font-mono text-sky-300">(NOT C AND T)</code> để lách kiểm soát kích thước tập kết quả.</li>
+                    <li><strong>Linear System Attack (Score 78):</strong> Chuỗi <code className="font-mono text-sky-300">&gt;= 3 truy vấn SUM/AVG</code> trên các tập con khác nhau nhằm lập hệ phương trình tuyến tính <code className="font-mono">A · X = B</code>.</li>
                   </ul>
                 </div>
 
                 <div className="bg-[var(--surface-subtle)] border border-white/5 p-3 rounded-lg">
                   <div className="font-bold text-purple-300 text-xs">3. Công thức Tổng hợp Điểm Rủi ro (Cumulative Risk Score):</div>
                   <div className="bg-[var(--surface-subtle)] p-2.5 rounded font-mono text-xs text-emerald-400 mt-1">
-                    Total_Risk = min(100, max(Scores) + min(14, (Count - 1) * 4))
+                    Total_Risk = min(100, max(Scores) + min(20, (Count - 1) * 4)) &nbsp;-- bonus_cap = 20, không giới hạn trần theo tier (clamp_by_tier = false)
                   </div>
                 </div>
               </div>
@@ -651,31 +697,43 @@ END;`}
                     <span>1. Khởi tạo Bảng SYS.NV, Bảng Log &amp; User Thực nghiệm</span>
                   </div>
                   <pre className="bg-[var(--surface-subtle)] p-3.5 rounded-lg border border-white/10 font-mono text-xs text-sky-300 overflow-x-auto leading-relaxed">
-{`-- Tạo bảng nhân viên
+{`-- Tạo bảng nhân viên vật lý tại SYSTEM.NV và Synonym SYS.NV (tránh ORA-46399 với DBMS_FGA)
 CREATE TABLE SYSTEM.NV (
-    manv VARCHAR2(20) PRIMARY KEY,
-    hoten VARCHAR2(100),
+    manv VARCHAR2(10) PRIMARY KEY,
+    hoten VARCHAR2(50),
     luong NUMBER(10, 2),
     gioitinh VARCHAR2(10),
     cmnd VARCHAR2(20)
 );
+CREATE OR REPLACE SYNONYM SYS.NV FOR SYSTEM.NV;
+CREATE OR REPLACE PUBLIC SYNONYM NV FOR SYSTEM.NV;
 
--- Tạo bảng ghi nhận cảnh báo Trigger tự trị
+-- Tạo bảng ghi nhận cảnh báo Trigger tự trị & FGA Handler
 CREATE TABLE SYS.IDS_TRIGGER_ALERTS (
     alert_id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    event_time TIMESTAMP DEFAULT SYSTIMESTAMP,
+    event_time TIMESTAMP WITH TIME ZONE DEFAULT SYSTIMESTAMP,
     db_user VARCHAR2(50),
     attack_type VARCHAR2(100),
-    details VARCHAR2(500)
+    details VARCHAR2(4000)
 );
 
--- Khởi tạo User thực nghiệm U1..U4 (Mật khẩu được cấu hình bảo mật qua biến môi trường)
+-- Bảng chuẩn lương chống Salami Attack tích lũy
+CREATE TABLE SYS.IDS_SALARY_BASELINES (
+    manv VARCHAR2(10) PRIMARY KEY,
+    base_luong NUMBER(10,2) NOT NULL,
+    max_allowed_luong NUMBER(10,2) NOT NULL,
+    updated_at TIMESTAMP DEFAULT SYSTIMESTAMP
+);
+
+-- Khởi tạo User U1..U4 qua DEFINE/ACCEPT trong oracle/SYS_FREEPDB1.sql (không hardcode mật khẩu yếu)
+DEFINE u1_pass = '<STRONG_PASSWORD>'
 CREATE USER U1 IDENTIFIED BY "••••••••";
-CREATE USER U2 IDENTIFIED BY "••••••••";
-CREATE USER U3 IDENTIFIED BY "••••••••";
-CREATE USER U4 IDENTIFIED BY "••••••••";
-GRANT CREATE SESSION TO U1, U2, U3, U4;
-GRANT SELECT, INSERT, UPDATE, DELETE ON SYSTEM.NV TO U1, U2, U3, U4;`}
+GRANT CREATE SESSION, CREATE TABLE, UNLIMITED TABLESPACE TO U1, U2, U3, U4;
+GRANT SELECT, INSERT, UPDATE, DELETE ON SYS.NV TO U1, U2, U3, U4;
+
+-- Kiểm thử nhanh qua SQL*Plus (khuyên dùng CONN hoặc truy vấn trực tiếp SYS.NV):
+--   CONN U1@localhost:1521/FREEPDB1
+--   SELECT * FROM SYS.NV;`}
                   </pre>
                 </div>
 
@@ -684,20 +742,22 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON SYSTEM.NV TO U1, U2, U3, U4;`}
                     <span>2. Cấu hình Unified Audit Policies (Bao gồm cả Giám sát Khóa mã hóa &amp; Đặc quyền)</span>
                   </div>
                   <pre className="bg-[var(--surface-subtle)] p-3.5 rounded-lg border border-white/10 font-mono text-xs text-purple-300 overflow-x-auto leading-relaxed">
-{`-- Policy giám sát thao tác DML trên bảng NV
+{`-- Policy giám sát thao tác DML trên bảng SYSTEM.NV (bao gồm SELECT qua Synonym SYS.NV)
 CREATE AUDIT POLICY ids_dml_nv_pol ACTIONS SELECT, INSERT, UPDATE, DELETE ON SYSTEM.NV;
 AUDIT POLICY ids_dml_nv_pol;
 
--- Policy giám sát leo thang đặc quyền
-CREATE AUDIT POLICY ids_priv_abuse_pol ACTIONS GRANT, REVOKE, CREATE USER, ALTER USER, DROP USER;
+-- Policy giám sát leo thang đặc quyền & backdoor
+CREATE AUDIT POLICY ids_priv_abuse_pol
+  ACTIONS GRANT, REVOKE, CREATE USER, ALTER USER, DROP USER, ALTER SYSTEM, SET ROLE;
 AUDIT POLICY ids_priv_abuse_pol;
 
 -- Policy giám sát truy cập khóa mã hóa (Trực tiếp & Gián tiếp)
 CREATE AUDIT POLICY ids_crypto_key_pol
   ACTIONS ADMINISTER KEY MANAGEMENT,
-          EXECUTE ON SYS.DBMS_CRYPTO,
           SELECT ON SYS.V_$ENCRYPTION_KEYS,
-          SELECT ON SYS.V_$ENCRYPTION_WALLET;
+          SELECT ON SYS.V_$ENCRYPTION_WALLET,
+          SELECT ON SYS.ENC$,
+          EXECUTE ON SYS.DBMS_CRYPTO;
 AUDIT POLICY ids_crypto_key_pol;`}
                   </pre>
                 </div>

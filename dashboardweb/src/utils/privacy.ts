@@ -3,8 +3,18 @@
  * hostnames, and sensitive PII (CMND/CCCD) in the Oracle DB-IDS monitoring system.
  */
 
-const PASSWORD_REGEX = /\b(IDENTIFIED\s+BY)\s+(['"]?[A-Za-z0-9_@#$%^&*!]+['"]?)/gi;
-const CONNECT_CRED_REGEX = /\b(CONNECT\s+)([A-Za-z0-9_#$]+)\/([^\s@]+)(@[A-Za-z0-9_.:/]+)?/gi;
+const PASSWORD_REGEX =
+  /\b(IDENTIFIED\s+BY)\s+(?:VALUES\s+)?(?:"[^"]*"|'[^']*'|[^\s;]+)(?:\s+REPLACE\s+(?:"[^"]*"|'[^']*'|[^\s;]+))?/gi;
+const USER_IDENTIFIED_REGEX =
+  /\b((?:CREATE|ALTER)\s+USER\s+)("?)([A-Za-z0-9_#$]+)(\2)(\s+IDENTIFIED\b)/gi;
+const CONNECT_CRED_REGEX =
+  /\b(CONN(?:ECT)?\s+)([A-Za-z0-9_#$]+)\/(?:"[^"]*"|'[^']*'|[^\s@;]+)(@[A-Za-z0-9_.:/-]+)?/gi;
+const OS_HOST_DETAIL_REGEX =
+  /(^|[\s(,:='"])([A-Za-z0-9_.-]+)@([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)/g;
+const IPV4_REGEX =
+  /\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b/g;
+const CMND_LITERAL_REGEX = /\b\d{9,12}\b/g;
+const EMPLOYEE_ID_EXCLUSION_REGEX = /^NV(?:\d+|_TRAP)$/i;
 
 /**
  * Always strips any database password from SQL text or logs, regardless of toggle state.
@@ -12,13 +22,60 @@ const CONNECT_CRED_REGEX = /\b(CONNECT\s+)([A-Za-z0-9_#$]+)\/([^\s@]+)(@[A-Za-z0
 export function sanitizeSqlCredentials(sql: string, maskUsernames: boolean = false): string {
   if (!sql) return '';
   let result = sql.replace(PASSWORD_REGEX, '$1 "••••••••"');
+  if (maskUsernames) {
+    result = result.replace(
+      USER_IDENTIFIED_REGEX,
+      (_match: string, prefix: string, quote: string, user: string, closeQuote: string, suffix: string) =>
+        `${prefix}${quote}${maskUsername(user, true)}${closeQuote}${suffix}`
+    );
+  }
   result = result.replace(
     CONNECT_CRED_REGEX,
-    (_match, prefix, user, _pass, dsn) => {
+    (_match: string, prefix: string, user: string, dsn?: string) => {
       const safeUser = maskUsernames ? maskUsername(user) : user;
       return `${prefix}${safeUser}/••••••••${dsn || ''}`;
     }
   );
+  return result;
+}
+
+/**
+ * Redacts SQL credentials unconditionally and, when privacyMode is active, masks
+ * CMND/CCCD literals, osUser@host pairs, IPv4 addresses, and known usernames
+ * (while preserving employee IDs like NV1..NV4 and NV_TRAP).
+ */
+export function redactSensitiveDetails(
+  text: string,
+  privacyMode: boolean,
+  knownUsers: string[] = []
+): string {
+  if (!text) return '';
+  let result = sanitizeSqlCredentials(text, privacyMode);
+  if (!privacyMode) return result;
+
+  result = result.replace(
+    OS_HOST_DETAIL_REGEX,
+    (_match: string, prefix: string, osUser: string, host: string) =>
+      `${prefix}${maskOsUser(osUser, true)}@${maskHost(host, true)}`
+  );
+
+  result = result.replace(IPV4_REGEX, (ip: string) => maskHost(ip, true));
+  result = result.replace(CMND_LITERAL_REGEX, (cmnd: string) => maskCmnd(cmnd, true));
+
+  const targetUsers = Array.from(
+    new Set(
+      knownUsers
+        .map((u) => u.trim())
+        .filter((u) => u.length > 0 && !EMPLOYEE_ID_EXCLUSION_REGEX.test(u))
+    )
+  ).sort((a, b) => b.length - a.length);
+
+  if (targetUsers.length > 0) {
+    const escapedUsers = targetUsers.map((u) => u.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const userTokenRegex = new RegExp(`\\b(?:${escapedUsers.join('|')})\\b`, 'gi');
+    result = result.replace(userTokenRegex, (token: string) => maskUsername(token, true));
+  }
+
   return result;
 }
 
@@ -43,7 +100,7 @@ export function maskContextString(context: string, enabled: boolean = true): str
   if (!enabled) return context;
   return context.replace(
     /\(([^@)]+)@([^)]+)\)/g,
-    (_m, osUser: string, host: string) => {
+    (_m: string, osUser: string, host: string) => {
       const maskedOs = osUser.length > 1 ? `${osUser[0]}•••` : '•••';
       const maskedHost =
         host.length > 4 ? `${host.slice(0, 3)}••••${host.slice(-2)}` : 'HOST-••••';

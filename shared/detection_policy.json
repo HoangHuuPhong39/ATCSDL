@@ -1,0 +1,183 @@
+{
+  "thresholds": {
+    "level_0": {
+      "min": 0,
+      "max": 19,
+      "label": "Level 0: Normal (An toàn)"
+    },
+    "level_1": {
+      "min": 20,
+      "max": 49,
+      "label": "Level 1: LOW/MED (Warning & Monitor)"
+    },
+    "level_2": {
+      "min": 50,
+      "max": 79,
+      "label": "Level 2: HIGH (Privilege Containment)"
+    },
+    "level_3": {
+      "min": 80,
+      "max": 100,
+      "label": "Level 3: CRITICAL (Full Isolation)"
+    }
+  },
+  "scoring": {
+    "bonus_per_extra_alert": 4,
+    "bonus_cap": 20,
+    "clamp_by_tier": false
+  },
+  "attack_scores": {
+    "honeytoken_trap": 95,
+    "sql_injection": 95,
+    "crypto_key_access": 92,
+    "brute_force_internal": 90,
+    "brute_force_external": 70,
+    "privilege_escalation": 88,
+    "ddl_destructive": 85,
+    "ddl_modify": 65,
+    "sdb_linear_system": 78,
+    "masquerading": 75,
+    "sdb_tracker": 72,
+    "sdb_count_based": 65,
+    "trigger_block": 65,
+    "dml_readonly_violation": 65,
+    "bulk_querying": 42,
+    "suspicious_client": 38,
+    "fga_sensitive_access": 35,
+    "sdb_probe_low": 28
+  },
+  "trigger_codes": {
+    "UNAUTHORIZED_DELETE": 20001,
+    "ABNORMAL_SALARY_MODIFICATION": 20002,
+    "FGA_TRAP_BLOCK": 20003,
+    "UNAUTHORIZED_DML_INTEGRITY": 20004
+  },
+  "bulk_query": {
+    "threshold_count": 10,
+    "window_seconds": 5
+  },
+  "brute_force": {
+    "external_threshold": 3,
+    "internal_lock_threshold": 5,
+    "window_minutes": 15
+  },
+  "patterns": {
+    "sqli": "(\\bOR\\b\\s*\\(?\\s*(?:['\"]?[0-9]+['\"]?\\s*(?:=|!=|<>|<|>)\\s*['\"]?[0-9]+['\"]?|['\"][A-Za-z0-9_]+['\"]\\s*=\\s*['\"][A-Za-z0-9_]+['\"])|\\bUNION\\b\\s+(?:ALL\\s+)?\\(?\\s*\\bSELECT\\b|(?:^|\\n)[ \\t]*(?!--|\\/\\*)\\S[^\\r\\n]*?(?:--|\\/\\*)|\\bDBMS_PIPE\\b|\\bDBMS_LOCK\\.SLEEP\\b|\\bUTL_HTTP\\b|\\bUTL_INADDR\\b|\\bUTL_FILE\\b|\\bDBMS_LDAP\\b|\\bXMLTYPE\\b|\\bEXTRACTVALUE\\b|\\bEXECUTE\\s+IMMEDIATE\\b)",
+    "honeytoken": "(NV_TRAP|001099000000)",
+    "stat_funcs": "\\b(COUNT|SUM|AVG|MAX|MIN|MEDIAN|STDDEV|VARIANCE|STATS_MODE|LISTAGG|PERCENTILE_CONT)\\s*\\(",
+    "crypto_direct": "(?:\\b(?:V\\$ENCRYPTION_KEYS|V\\$ENCRYPTION_WALLET|V_\\$ENCRYPTION_KEYS|V_\\$ENCRYPTION_WALLET|DBA_ENCRYPTED_COLUMNS|USER_ENCRYPTED_COLUMNS)\\b|\\bENC\\$(?![A-Za-z0-9_]))",
+    "crypto_indirect": "\\b(DBMS_CRYPTO|ADMINISTER\\s+KEY\\s+MANAGEMENT|UTL_I18N\\.STRING_TO_RAW)\\b",
+    "suspicious_clients": "(sqlmap|hydra|nikto|burp|nmap|\\bnc\\b|netcat|curl|wget|powershell|pwsh|cmd\\.exe|metasploit)",
+    "masquerade_hosts": "(kali|parrot|attacker|rogue|unknown|tor-exit|vpn-ext)",
+    "nv_table": "\\b(?:SYS\\.|SYSTEM\\.)?NV\\b"
+  },
+  "priv_abuse_actions": [
+    "GRANT",
+    "REVOKE",
+    "CREATE USER",
+    "ALTER USER",
+    "DROP USER",
+    "ALTER SYSTEM",
+    "ALTER DATABASE",
+    "AUDIT",
+    "NOAUDIT",
+    "SET ROLE"
+  ],
+  "ddl_destructive_actions": [
+    "DROP TABLE",
+    "TRUNCATE TABLE"
+  ],
+  "ddl_modify_actions": [
+    "ALTER TABLE",
+    "CREATE TABLE"
+  ],
+  "protected_accounts": [
+    "SYS",
+    "SYSTEM",
+    "PUBLIC",
+    "PDBADMIN",
+    "AUDSYS",
+    "DBSNMP",
+    "OUTLN",
+    "XDB"
+  ],
+  "ide_metadata_objects": [
+    "DUAL",
+    "ALL_OBJECTS",
+    "ALL_TAB_COLS",
+    "ALL_SYNONYMS",
+    "ALL_TABLES",
+    "ALL_VIEWS",
+    "ALL_USERS",
+    "ALL_PROCEDURES",
+    "ALL_ARGUMENTS",
+    "ALL_CONSTRAINTS",
+    "ALL_INDEXES",
+    "ALL_TRIGGERS",
+    "ALL_SOURCE",
+    "NLS_SESSION_PARAMETERS",
+    "V$OPTION",
+    "V$VERSION",
+    "USER_ROLE_PRIVS",
+    "DATABASE_COMPATIBLE_LEVEL",
+    "USER_USERS",
+    "DBMS_APPLICATION_INFO",
+    "DBMS_OUTPUT"
+  ],
+  "user_baselines": {
+    "U1": {
+      "trusted_hosts": [
+        "LAPTOP-R03ORTGV"
+      ],
+      "trusted_os_users": [
+        "pc"
+      ],
+      "trusted_clients": [
+        "SQL Developer",
+        "sqlplus.exe"
+      ]
+    },
+    "U2": {
+      "trusted_hosts": [
+        "WORKSTATION-FIN02",
+        "LAPTOP-R03ORTGV"
+      ],
+      "trusted_os_users": [
+        "fin_u2",
+        "pc"
+      ],
+      "trusted_clients": [
+        "SQL Developer",
+        "sqlplus.exe"
+      ]
+    },
+    "U3": {
+      "trusted_hosts": [
+        "ANALYST-PC03",
+        "LAPTOP-R03ORTGV"
+      ],
+      "trusted_os_users": [
+        "stat_u3",
+        "pc"
+      ],
+      "trusted_clients": [
+        "SQL Developer",
+        "sqlplus.exe"
+      ]
+    },
+    "U4": {
+      "trusted_hosts": [
+        "LAB-CLIENT-04",
+        "LAPTOP-R03ORTGV"
+      ],
+      "trusted_os_users": [
+        "intern_u4",
+        "pc"
+      ],
+      "trusted_clients": [
+        "sqlplus.exe",
+        "SQL Developer"
+      ]
+    }
+  }
+}

@@ -208,7 +208,7 @@ export const INITIAL_ALERTS: AlertItem[] = [
     context: "sqlplus.exe (pc@LAPTOP-R03ORTGV)"
   },
   {
-    key: "TRIG|59|SYS|2026-11-06 00:15:30",
+    key: "TRIG|59|U1|2026-11-06 00:15:30",
     severity: "HIGH",
     risk_score: 65,
     response_level: 2,
@@ -225,7 +225,7 @@ export const INITIAL_ALERTS: AlertItem[] = [
     context: "Database Trigger (SYS.TRG_PROTECT_NV)"
   },
   {
-    key: "TRIG|58|SYS|2026-11-06 00:15:30",
+    key: "TRIG|58|U1|2026-11-06 00:15:30",
     severity: "HIGH",
     risk_score: 65,
     response_level: 2,

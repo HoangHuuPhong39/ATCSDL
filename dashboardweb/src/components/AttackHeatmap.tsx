@@ -32,6 +32,7 @@ interface CustomHeatmapCellProps {
   cy?: number;
   payload?: HeatmapCellPoint;
   totalCols: number;
+  privacyMode: boolean;
   onSelectCell: (cell: HeatmapCellPoint) => void;
 }
 
@@ -40,6 +41,7 @@ const CustomHeatmapCell: React.FC<CustomHeatmapCellProps> = ({
   cy = 0,
   payload,
   totalCols,
+  privacyMode,
   onSelectCell,
 }) => {
   if (!payload) return null;
@@ -49,6 +51,7 @@ const CustomHeatmapCell: React.FC<CustomHeatmapCellProps> = ({
   const x = cx - cellWidth / 2;
   const y = cy - cellHeight / 2;
   const isActive = payload.intensity > 0;
+  const displayUser = maskUsername(payload.user, privacyMode);
 
   return (
     <g
@@ -63,7 +66,7 @@ const CustomHeatmapCell: React.FC<CustomHeatmapCellProps> = ({
       role={isActive ? 'button' : undefined}
       aria-label={
         isActive
-          ? `User ${payload.user} lúc ${payload.timeSlot}: cường độ ${payload.intensity}/100, ${payload.eventCount} sự kiện`
+          ? `User ${displayUser} lúc ${payload.timeSlot}: cường độ ${payload.intensity}/100, ${payload.eventCount} sự kiện`
           : undefined
       }
       style={{ cursor: isActive ? 'pointer' : 'default' }}
@@ -127,9 +130,10 @@ const CustomHeatmapCell: React.FC<CustomHeatmapCellProps> = ({
 interface CustomTooltipProps {
   active?: boolean;
   payload?: Array<{ payload: HeatmapCellPoint }>;
+  privacyMode: boolean;
 }
 
-const CustomHeatmapTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {
+const CustomHeatmapTooltip: React.FC<CustomTooltipProps> = ({ active, payload, privacyMode }) => {
   if (!active || !payload || !payload.length) return null;
   const cell = payload[0].payload;
 
@@ -137,7 +141,7 @@ const CustomHeatmapTooltip: React.FC<CustomTooltipProps> = ({ active, payload })
     <div className="bg-[var(--surface-subtle)]/95 border border-sky-400/40 rounded-xl p-3.5 shadow-2xl shadow-black/90 text-xs max-w-xs space-y-2 backdrop-blur-md">
       <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-2">
         <span className="font-mono font-bold text-sky-300 text-xs">
-          User: {cell.user}
+          User: {maskUsername(cell.user, privacyMode)}
         </span>
         <span className="font-mono text-slate-300 tabular-nums">
           Khung giờ: {cell.timeSlot}
@@ -184,11 +188,8 @@ export const AttackHeatmap: React.FC<AttackHeatmapProps> = ({
   const [selectedCell, setSelectedCell] = useState<HeatmapCellPoint | null>(null);
 
   const matrix = useMemo(() => {
-    const mappedUsers = privacyMode
-      ? users.map((u) => ({ ...u, USERNAME: maskUsername(u.USERNAME, true) }))
-      : users;
-    return buildAttackHeatmapMatrix(alerts, mappedUsers, groupFilter);
-  }, [alerts, users, privacyMode, groupFilter]);
+    return buildAttackHeatmapMatrix(alerts, users, groupFilter);
+  }, [alerts, users, groupFilter]);
 
   const activeInspectionCell =
     selectedCell &&
@@ -295,7 +296,10 @@ export const AttackHeatmap: React.FC<AttackHeatmapProps> = ({
               name="Tài khoản"
               domain={[-0.6, Math.max(0.6, matrix.users.length - 0.4)]}
               ticks={matrix.users.map((_, idx) => idx)}
-              tickFormatter={(idx: number) => matrix.users[idx] || ''}
+              tickFormatter={(idx: number) => {
+                const rawUser = matrix.users[idx];
+                return rawUser ? maskUsername(rawUser, privacyMode) : '';
+              }}
               tick={{ fill: 'var(--accent)', fontSize: 12, fontWeight: 700, fontFamily: 'IBM Plex Mono, monospace' }}
               axisLine={{ stroke: 'rgba(56, 189, 248, 0.2)' }}
               tickLine={false}
@@ -305,7 +309,7 @@ export const AttackHeatmap: React.FC<AttackHeatmapProps> = ({
             <ZAxis type="number" dataKey="intensity" range={[100, 500]} name="Cường độ" />
             <Tooltip
               cursor={{ strokeDasharray: '3 3', stroke: 'rgba(56, 189, 248, 0.35)' }}
-              content={<CustomHeatmapTooltip />}
+              content={<CustomHeatmapTooltip privacyMode={privacyMode} />}
             />
             <Scatter
               name="Attack Intensity Matrix"
@@ -323,6 +327,7 @@ export const AttackHeatmap: React.FC<AttackHeatmapProps> = ({
                     cy={typedProps.cy}
                     payload={typedProps.payload}
                     totalCols={matrix.timeSlots.length}
+                    privacyMode={privacyMode}
                     onSelectCell={handleCellClick}
                   />
                 );
@@ -367,7 +372,7 @@ export const AttackHeatmap: React.FC<AttackHeatmapProps> = ({
         {activeInspectionCell && activeInspectionCell.intensity > 0 ? (
           <div className="flex items-center justify-between sm:justify-end gap-2.5 bg-[var(--surface-hover)] border border-[var(--line)] px-2.5 py-1 rounded-lg">
             <div className="text-xs font-mono text-[var(--text-2)] truncate max-w-md">
-              Điểm nóng: <strong className="text-[var(--text-1)]">{activeInspectionCell.user}</strong> lúc{' '}
+              Điểm nóng: <strong className="text-[var(--text-1)]">{maskUsername(activeInspectionCell.user, privacyMode)}</strong> lúc{' '}
               <span className="tabular-nums">{activeInspectionCell.timeSlot}</span> ·{' '}
               <strong className="text-[var(--danger)] tabular-nums">{activeInspectionCell.intensity}/100</strong>
             </div>

@@ -16,7 +16,7 @@ import { AlertItem, DbUser, FgaEvent, Metrics, TriggerAlert, ActiveTab } from '.
 import { KpiCards } from '../KpiCards';
 import { AttackHeatmap } from '../AttackHeatmap';
 import { computeAttackBreakdown, getRiskColorHex } from '../../utils/analytics';
-import { maskUsername } from '../../utils/privacy';
+import { maskUsername, redactSensitiveDetails } from '../../utils/privacy';
 import { Card } from '../ui/Card';
 import { StatusDot } from '../ui/StatusDot';
 
@@ -27,6 +27,7 @@ interface OverviewTabProps {
   fgaEvents: FgaEvent[];
   triggers: TriggerAlert[];
   privacyMode?: boolean;
+  knownUsers?: string[];
   onOpenAlertModal: (alert: AlertItem) => void;
   onNavigateTab: (tab: ActiveTab) => void;
   onOpenOracleBridge: () => void;
@@ -46,6 +47,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   fgaEvents,
   triggers,
   privacyMode = false,
+  knownUsers,
   onOpenAlertModal,
   onNavigateTab,
   onOpenOracleBridge,
@@ -111,6 +113,10 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   };
 
   const breakdown = useMemo(() => computeAttackBreakdown(alerts), [alerts]);
+  const resolvedKnownUsers = useMemo(
+    () => knownUsers ?? users.map((u) => u.USERNAME),
+    [knownUsers, users]
+  );
 
   const reviewedAlertsCount = useMemo(() => alerts.filter((a) => a.reviewed).length, [alerts]);
   const reviewedFgaCount = useMemo(() => fgaEvents.filter((f) => f.reviewed).length, [fgaEvents]);
@@ -122,7 +128,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
   // Sorted recent alerts (descending by time, top 8)
   const sortedRecentAlerts = useMemo(() => {
     return [...alerts]
-      .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+      .sort((a, b) => (b.time || '').localeCompare(a.time || ''))
       .slice(0, 8);
   }, [alerts]);
 
@@ -197,6 +203,11 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                 const isCritical = a.risk_score >= 80;
                 const isHigh = a.risk_score >= 50 && a.risk_score < 80;
                 const severityLabel = a.severity || (isCritical ? 'CRITICAL' : isHigh ? 'HIGH' : 'MED');
+                const redactedDetails = redactSensitiveDetails(
+                  a.details,
+                  privacyMode,
+                  resolvedKnownUsers
+                );
 
                 return (
                   <div
@@ -214,7 +225,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                       </span>
                       <span
                         className="text-xs font-medium text-[var(--text-1)] truncate flex-1"
-                        title={a.attack_type}
+                        title={redactedDetails ? `${a.attack_type} — ${redactedDetails}` : a.attack_type}
                       >
                         {cleanAttackName(a.attack_type)}
                       </span>
@@ -295,6 +306,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                 const isOpen = !isLocked && !isReadOnly;
                 const isConfirmingLock = confirmLockUser === u.USERNAME;
                 const color = getRiskColorHex(u.RISK_SCORE);
+                const displayUsername = maskUsername(u.USERNAME, privacyMode);
 
                 return (
                   <div
@@ -310,7 +322,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="font-mono font-semibold text-xs text-[var(--text-1)]">
-                          {maskUsername(u.USERNAME, privacyMode)}
+                          {displayUsername}
                         </span>
                         <span
                           className={`text-xs font-mono font-semibold px-1.5 py-0.2 rounded border ${
@@ -338,7 +350,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                             type="button"
                             onClick={() => onUserAction(u.USERNAME, 'unlock')}
                             className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[var(--ok-soft)] border border-[var(--ok)]/30 text-[var(--ok)] hover:bg-[var(--ok-soft)]/80 text-xs font-medium cursor-pointer transition-colors focus-visible:ring"
-                            title={`Mở khóa tài khoản ${u.USERNAME}`}
+                            title={`Mở khóa tài khoản ${displayUsername}`}
                           >
                             <Unlock className="w-3 h-3" />
                             <span>Mở khóa</span>
@@ -352,7 +364,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                               type="button"
                               onClick={() => onUserAction(u.USERNAME, 'grant_dml')}
                               className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[var(--surface)] border border-[var(--line)] text-[var(--text-1)] hover:border-[var(--accent)] text-xs font-medium cursor-pointer transition-colors focus-visible:ring"
-                              title={`Khôi phục quyền DML cho ${u.USERNAME}`}
+                              title={`Khôi phục quyền DML cho ${displayUsername}`}
                             >
                               <ShieldCheck className="w-3 h-3 text-[var(--accent)]" />
                               <span>Khôi phục DML</span>
@@ -365,7 +377,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                                   ? 'bg-[var(--danger)] text-white border border-[var(--danger)] animate-pulse'
                                   : 'bg-[var(--danger-soft)] border border-[var(--danger)]/30 text-[var(--danger)] hover:bg-[var(--danger)] hover:text-white'
                               }`}
-                              title={`Khóa tài khoản ${u.USERNAME}`}
+                              title={`Khóa tài khoản ${displayUsername}`}
                             >
                               <Lock className="w-3 h-3" />
                               <span>{isConfirmingLock ? 'Bấm lại để xác nhận' : 'Khóa'}</span>
@@ -380,7 +392,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                               type="button"
                               onClick={() => onUserAction(u.USERNAME, 'revoke_dml')}
                               className="inline-flex items-center gap-1 px-2 py-1 rounded bg-[var(--surface)] border border-[var(--line)] text-[var(--text-2)] hover:text-[var(--warn)] text-xs font-medium cursor-pointer transition-colors focus-visible:ring"
-                              title={`Hạ quyền tạm thời về Read-Only cho ${u.USERNAME}`}
+                              title={`Hạ quyền tạm thời về Read-Only cho ${displayUsername}`}
                             >
                               <ShieldAlert className="w-3 h-3 text-[var(--warn)]" />
                               <span>Hạ quyền</span>
@@ -393,7 +405,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                                   ? 'bg-[var(--danger)] text-white border border-[var(--danger)] animate-pulse'
                                   : 'bg-[var(--danger-soft)] border border-[var(--danger)]/30 text-[var(--danger)] hover:bg-[var(--danger)] hover:text-white'
                               }`}
-                              title={`Khóa tài khoản ${u.USERNAME}`}
+                              title={`Khóa tài khoản ${displayUsername}`}
                             >
                               <Lock className="w-3 h-3" />
                               <span>{isConfirmingLock ? 'Bấm lại để xác nhận' : 'Khóa'}</span>

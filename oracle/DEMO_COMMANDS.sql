@@ -1,11 +1,11 @@
 -- =================================================================================
 -- KỊCH BẢN DEMO TỔNG HỢP: HỆ THỐNG AN TOÀN CSDL & PHÁT HIỆN XÂM NHẬP (ORACLE 23ai DB-IDS)
 -- Hướng dẫn: Mở Oracle SQL Developer (kết nối bằng U1 hoặc U2) và Web Dashboard
--- tại địa chỉ http://localhost:8050 để quan sát trực quan từng cấp độ phản ứng.
+-- tại địa chỉ http://localhost:3000 để quan sát trực quan từng cấp độ phản ứng.
 -- =================================================================================
 
 -- [CHUẨN BỊ TRƯỚC MỖI KỊCH BẢN TRÊN WEB DASHBOARD]
--- 1. Trên giao diện http://localhost:8050, bấm nút "Xóa lịch sử & Reset Risk Score".
+-- 1. Trên giao diện http://localhost:3000, bấm nút "Xóa lịch sử & Reset Risk Score".
 -- 2. Đảm bảo U1 / U2 đang ở trạng thái "OPEN" và quyền "FULL DML" (nếu đang khóa hoặc
 --    Read-Only, bấm nút "Mở khóa User" và "Khôi phục quyền DML (Grant Full)").
 
@@ -15,7 +15,7 @@
 -- Mục tiêu: Chứng minh cơ chế phòng vệ tầng dữ liệu chặn đứng hành vi xóa nhân viên
 -- hoặc tự ý nâng lương > 50%, đồng thời ghi vết bằng PRAGMA AUTONOMOUS_TRANSACTION
 -- ngay cả khi câu lệnh giao dịch chính bị Rollback.
--- Kết nối thực hiện: U1 (Mật khẩu: U1123)
+-- Kết nối thực hiện: U1 (dùng mật khẩu đã cấu hình khi chạy SYS_FREEPDB1.sql)
 -- =================================================================================
 
 -- 1.1. Thử cập nhật lương hợp lệ (tăng <= 50%: từ 900 lên 1000) -> THÀNH CÔNG
@@ -37,18 +37,21 @@ DELETE FROM SYS.NV WHERE manv = 'NV2';
 -- =================================================================================
 -- TEST 2: KIỂM TOÁN MỊN (DBMS_FGA) & CHẠM BẪY DỮ LIỆU HONEYTOKEN (NV_TRAP)
 -- Mục tiêu:
---   - Bước 2A: Kiểm chứng FGA_HIGH_SALARY_ACCESS (Cảnh báo Level 1: Risk Score = 30)
+--   - Bước 2A: Kiểm chứng FGA_HIGH_SALARY_ACCESS (Cảnh báo Level 1: Risk Score = 35;
+--     giám sát cột LUONG, CMND trên toàn bộ nhân viên với audit_condition => NULL,
+--     nên truy vấn chạm LUONG/CMND trên NV1 hay NV3 đều kích hoạt FGA, còn truy vấn
+--     chỉ lấy manv, hoten, gioitinh thì không kích hoạt)
 --   - Bước 2B: Kiểm chứng bẫy Honeytoken FGA_HONEYTOKEN_TRAP (Phản ứng Level 3:
 --     Risk Score = 95 -> Tự động KHÓA TÀI KHOẢN & NGẮT KẾT NỐI tức thời)
--- Kết nối thực hiện: U1 (Mật khẩu: U1123)
+-- Kết nối thực hiện: U1 (dùng mật khẩu đã cấu hình khi chạy SYS_FREEPDB1.sql)
 -- =================================================================================
 
--- [Bước 2A - Level 1 Warning] Truy vấn thông thường vào nhân viên lương thấp (< 1000)
--- -> Không kích hoạt FGA_HIGH_SALARY_ACCESS
+-- [Bước 2A - Level 1 Warning] Truy vấn thông thường chỉ chọn các cột không nhạy cảm (manv, hoten, gioitinh)
+-- -> Không chạm tới LUONG hoặc CMND nên không kích hoạt FGA_HIGH_SALARY_ACCESS
 SELECT manv, hoten, gioitinh FROM SYS.NV WHERE manv = 'NV1';
 
--- [Bước 2A - Level 1 Warning] Truy vấn vào cột nhạy cảm (LUONG, CMND) của nhân viên lương >= 1000
--- -> Kích hoạt FGA_HIGH_SALARY_ACCESS -> Dashboard báo Risk Score = 30 (Level 1: Monitor)
+-- [Bước 2A - Level 1 Warning] Truy vấn vào cột nhạy cảm (LUONG, CMND) trên nhân viên bất kỳ (VD: NV1 hoặc NV3)
+-- -> Kích hoạt FGA_HIGH_SALARY_ACCESS (audit_condition => NULL) -> Dashboard báo Risk Score = 35 (Level 1: Monitor)
 SELECT manv, hoten, luong, cmnd FROM SYS.NV WHERE manv = 'NV3';
 
 -- [Bước 2B - Level 3 Full Isolation] Kẻ tấn công dò quét/dump trúng bản ghi bẫy Honeytoken (NV_TRAP)
@@ -71,14 +74,15 @@ SELECT * FROM SYS.NV WHERE manv = 'NV_TRAP';
 -- Kết nối thực hiện: U1 (Trước khi chạy, nhớ bấm "Mở khóa User" & "Khôi phục quyền DML" trên Dashboard)
 -- =================================================================================
 
--- 3.1. Chạy liên tiếp 4 truy vấn thống kê có điều kiện lọc biến thiên (Tracker Queries):
-SELECT COUNT(*), AVG(luong) FROM SYS.NV WHERE gioitinh = 'Nam';
+-- 3.1. Chạy liên tiếp 4 truy vấn thống kê qua SYS.NV_SAFE_VIEW (hoặc kèm điều kiện WHERE luong < 5000)
+--      để loại trừ bản ghi bẫy NV_TRAP (tránh kích hoạt nhầm chặn tức thời ORA-20003) và minh họa SDB Inference:
+SELECT COUNT(*), AVG(luong) FROM SYS.NV_SAFE_VIEW WHERE gioitinh = 'Nam';
 
-SELECT SUM(luong), MAX(luong) FROM SYS.NV WHERE gioitinh = 'Nam' AND luong < 5000;
+SELECT SUM(luong), MAX(luong) FROM SYS.NV_SAFE_VIEW WHERE gioitinh = 'Nam' AND luong < 5000;
 
-SELECT COUNT(*), SUM(luong) FROM SYS.NV WHERE gioitinh = 'Nam' AND manv != 'NV1' AND luong < 5000;
+SELECT COUNT(*), SUM(luong) FROM SYS.NV_SAFE_VIEW WHERE gioitinh = 'Nam' AND manv != 'NV1' AND luong < 5000;
 
-SELECT AVG(luong), MIN(luong) FROM SYS.NV WHERE luong >= 1000 AND luong < 5000;
+SELECT AVG(luong), MIN(luong) FROM SYS.NV_SAFE_VIEW WHERE luong >= 1000 AND luong < 5000;
 
 -- 3.2. Bấm "Làm mới dữ liệu (Flush Audit)" trên Web Dashboard:
 --      -> Cảnh báo "Statistical Inference Attack (Tấn công suy diễn thống kê)" xuất hiện!
@@ -129,5 +133,26 @@ GRANT DBA TO U2;
 --   sqlplus -L U2/SaiMatKhau_Lan2@localhost:1521/FREEPDB1
 --   sqlplus -L U2/SaiMatKhau_Lan3@localhost:1521/FREEPDB1
 
--- -> Quan sát trên Dashboard: Cảnh báo "Brute-Force Logon (ORA-01017)" xuất hiện,
+-- -> Quan sát trên Dashboard (http://localhost:3000): Cảnh báo "Brute-Force Logon (ORA-01017)" xuất hiện,
 --    Risk Score của U2 = 90/100 và tài khoản U2 tự động chuyển sang trạng thái LOCKED!
+
+
+-- =================================================================================
+-- TEST 6: DÒ QUÉT KHÓA MÃ HÓA TDE & GÓI MẬT MÃ (ids_crypto_key_pol - LEVEL 3: CRITICAL)
+-- Mục tiêu: Phát hiện hành vi truy cập trái phép kho khóa mã hóa (V$ENCRYPTION_KEYS,
+-- V$ENCRYPTION_WALLET, SYS.ENC$) hoặc gọi gói mật mã DBMS_CRYPTO thông qua Unified Audit
+-- Policy ids_crypto_key_pol và bộ phát hiện Crypto Key Access (Risk Score = 92).
+-- Kết nối thực hiện: U1 (dùng mật khẩu đã cấu hình khi chạy SYS_FREEPDB1.sql;
+--                   nhớ mở khóa & reset lịch sử trên Dashboard trước khi test)
+-- =================================================================================
+
+-- 6.1. Dò quét trực tiếp bảng/view chứa khóa mã hóa TDE:
+SELECT * FROM SYS.V_$ENCRYPTION_KEYS;
+SELECT * FROM V$ENCRYPTION_KEYS;
+
+-- 6.2. Hoặc gọi gián tiếp gói mật mã DBMS_CRYPTO (không bị bỏ qua dù dùng FROM DUAL):
+SELECT DBMS_CRYPTO.HASH(UTL_I18N.STRING_TO_RAW('probe_secret', 'AL32UTF8'), 2) FROM DUAL;
+
+-- -> Bấm "Làm mới dữ liệu (Flush Audit)" trên Dashboard (http://localhost:3000):
+--    Hệ thống ghi nhận sự kiện từ policy IDS_CRYPTO_KEY_POL, phát cảnh báo CRITICAL
+--    "Unauthorized Encryption Key Access" (Risk Score = 92, Level 3) và tự động KHÓA U1!

@@ -8,10 +8,20 @@ import {
   BookOpen,
 } from 'lucide-react';
 import { TriggerAlert, ActiveTab } from '../../types/ids';
-import { maskUsername } from '../../utils/privacy';
+import { maskUsername, redactSensitiveDetails } from '../../utils/privacy';
+
+function getTriggerOraCode(attackType?: string): string {
+  const upper = (attackType || '').toUpperCase();
+  if (upper.includes('SALARY')) return 'ORA-20002';
+  if (upper.includes('HONEYTOKEN') || upper.includes('SQL_INJECTION')) return 'ORA-20003';
+  if (upper.includes('INTEGRITY')) return 'ORA-20004';
+  return 'ORA-20001';
+}
 
 interface TriggersTabProps {
   triggers: TriggerAlert[];
+  privacyMode?: boolean;
+  knownUsers?: string[];
   onToggleReviewTrigger: (id: number) => void;
   onMarkAllTriggersReviewed: () => void;
   onResetReviewedTriggers: () => void;
@@ -24,6 +34,8 @@ interface TriggersTabProps {
 
 export const TriggersTab: React.FC<TriggersTabProps> = ({
   triggers,
+  privacyMode = false,
+  knownUsers = [],
   onToggleReviewTrigger,
   onMarkAllTriggersReviewed,
   onResetReviewedTriggers,
@@ -189,7 +201,10 @@ export const TriggersTab: React.FC<TriggersTabProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--line)]">
-                {triggers.map((t) => (
+                {triggers.map((t) => {
+                  const redactedDetails = redactSensitiveDetails(t.DETAILS, privacyMode, knownUsers);
+                  const oraCode = getTriggerOraCode(t.ATTACK_TYPE);
+                  return (
                   <tr
                     key={t.ALERT_ID}
                     onClick={() => onOpenTriggerModal && onOpenTriggerModal(t)}
@@ -220,12 +235,12 @@ export const TriggersTab: React.FC<TriggersTabProps> = ({
 
                     {/* User */}
                     <td className="py-2.5 px-3.5 font-mono font-semibold text-[var(--text-1)] whitespace-nowrap">
-                      {maskUsername(t.DB_USER)}
+                      {maskUsername(t.DB_USER, privacyMode)}
                     </td>
 
                     {/* Error Code */}
                     <td className="py-2.5 px-3.5 font-mono font-bold whitespace-nowrap text-[var(--danger)]">
-                      {t.ATTACK_TYPE?.includes('SALARY') ? 'ORA-20002' : 'ORA-20001'}
+                      {oraCode}
                     </td>
 
                     {/* Attack Type */}
@@ -235,8 +250,8 @@ export const TriggersTab: React.FC<TriggersTabProps> = ({
 
                     {/* SQL Details (Truncated) */}
                     <td className="py-2.5 px-3.5 max-w-[320px]">
-                      <span className="soc-sql-chip truncate block" title={t.DETAILS}>
-                        {t.DETAILS}
+                      <span className="soc-sql-chip truncate block" title={redactedDetails}>
+                        {redactedDetails}
                       </span>
                     </td>
 
@@ -266,7 +281,8 @@ export const TriggersTab: React.FC<TriggersTabProps> = ({
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}

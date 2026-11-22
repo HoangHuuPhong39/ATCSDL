@@ -3,24 +3,27 @@ import assert from 'node:assert/strict';
 import {
   classifyAlertGroup,
   computeAttackBreakdown,
+  computeUserRiskScore,
   calculateSystemMetrics,
   buildAttackHeatmapMatrix,
   getTimeBucketLabel,
   recalculateUsersAfterReset,
-} from './analytics';
+} from './analytics.ts';
 import {
   sanitizeSqlCredentials,
+  redactSensitiveDetails,
   maskUsername,
   maskHost,
   maskCmnd,
-} from './privacy';
-import { evaluateOracleSqlBatch } from './oracleDetector';
+} from './privacy.ts';
+import { evaluateOracleSqlBatch } from './oracleDetector.ts';
 import {
   buildPdfReportModel,
   wrapTextByChars,
   buildPdfBinaryFromJpegPages,
-} from './pdfExporter';
-import { INITIAL_ALERTS, INITIAL_AUDIT_LOGS, INITIAL_USERS } from '../data/initialData';
+  renderPdfReportPages,
+} from './pdfExporter.ts';
+import { INITIAL_ALERTS, INITIAL_AUDIT_LOGS, INITIAL_USERS } from '../data/initialData.ts';
 
 test('classifyAlertGroup distinguishes DBMS technical attacks from SDB inference attacks', () => {
   assert.equal(
@@ -40,13 +43,23 @@ test('classifyAlertGroup distinguishes DBMS technical attacks from SDB inference
   );
 });
 
-test('computeAttackBreakdown accurately counts all 10 DBMS and SDB attack techniques', () => {
+test('computeAttackBreakdown accurately counts all DBMS and SDB attack techniques without duplication', () => {
   const summary = computeAttackBreakdown(INITIAL_ALERTS);
   assert.equal(summary.total, INITIAL_ALERTS.length);
   assert.equal(summary.dbmsCount + summary.sdbCount, summary.total);
   assert.ok(summary.dbmsCount >= 5, 'Should have at least 5 DBMS technical attack alerts');
   assert.ok(summary.sdbCount >= 4, 'Should have at least 4 SDB inference attack alerts');
   assert.equal(summary.dbmsPercent + summary.sdbPercent, 100);
+
+  const dbmsTechSum = summary.byTechnique
+    .filter((t) => t.group === 'DBMS')
+    .reduce((acc, t) => acc + t.count, 0);
+  const sdbTechSum = summary.byTechnique
+    .filter((t) => t.group === 'SDB')
+    .reduce((acc, t) => acc + t.count, 0);
+
+  assert.equal(dbmsTechSum, summary.dbmsCount);
+  assert.equal(sdbTechSum, summary.sdbCount);
 });
 
 test('calculateSystemMetrics computes locked, readonly, and max_risk accurately', () => {
@@ -87,20 +100,74 @@ test('recalculateUsersAfterReset resets user risk and restores privileges when a
   const u3 = partialReset.find((u) => u.USERNAME === 'U3')!;
   assert.equal(u1.RISK_SCORE, 0);
   assert.equal(u1.ACCOUNT_STATUS, 'OPEN');
-  assert.ok(u3.RISK_SCORE >= 65);
-  assert.equal(u3.RESPONSE_LEVEL, 2);
+  // U3 has 3 alerts [70, 65, 72] -> 72 + 2*4 = 80 (Level 3 LOCKED without tier clamping)
+  assert.equal(u3.RISK_SCORE, 80);
+  assert.equal(u3.RESPONSE_LEVEL, 3);
+  assert.equal(u3.ACCOUNT_STATUS, 'LOCKED');
 });
 
-test('privacy helpers redact plain-text passwords and mask sensitive usernames, hosts, and CMND', () => {
+test('computeUserRiskScore escalates across tiers without clamping and autoResponse=false preserves account locks', () => {
+  // 5 alerts of 65 -> 65 + (5 - 1) * 4 = 81 (escalates past 79 without tier clamping)
+  assert.equal(computeUserRiskScore([65, 65, 65, 65, 65]), 81);
+  // 6 alerts of 65 -> 65 + min(20, 5 * 4) = 85 (hits bonus_cap = 20)
+  assert.equal(computeUserRiskScore([65, 65, 65, 65, 65, 65]), 85);
+
+  const resetWithoutAutoResponse = recalculateUsersAfterReset(INITIAL_USERS, [], false);
+  for (let i = 0; i < INITIAL_USERS.length; i++) {
+    const before = INITIAL_USERS[i];
+    const after = resetWithoutAutoResponse[i];
+    assert.equal(after.RISK_SCORE, 0);
+    assert.equal(after.RESPONSE_LEVEL, 0);
+    assert.equal(after.ACCOUNT_STATUS, before.ACCOUNT_STATUS);
+    assert.equal(after.DML_STATUS, before.DML_STATUS);
+    assert.equal(after.PRIVILEGES, before.PRIVILEGES);
+  }
+});
+
+test('privacy helpers redact plain-text and quoted passwords and mask PII/context while preserving employee IDs', () => {
   const rawSql = "CREATE USER U1 IDENTIFIED BY U1123; CONNECT U1/SecretPass@localhost:1521/FREEPDB1";
   const sanitized = sanitizeSqlCredentials(rawSql);
   assert.ok(!sanitized.includes('U1123'), 'Plain-text password should be redacted');
   assert.ok(!sanitized.includes('SecretPass'), 'Connection password should be redacted');
 
+  const connShortSql = 'CONN u1/secret@FREEPDB1; CONNECTION_CHECK=1';
+  const sanitizedConn = sanitizeSqlCredentials(connShortSql);
+  assert.ok(!sanitizedConn.includes('secret'), 'CONN abbreviation password should be redacted');
+  assert.equal(sanitizedConn, 'CONN u1/••••••••@FREEPDB1; CONNECTION_CHECK=1');
+
+  const connShortMasked = sanitizeSqlCredentials('CONN u1/"My Secret"@FREEPDB1', true);
+  assert.ok(!connShortMasked.includes('My Secret'));
+  assert.equal(connShortMasked, 'CONN u••1/••••••••@FREEPDB1');
+
+  const quotedCredSql = 'CREATE USER U1 IDENTIFIED BY "My Pass!@#1"';
+  const sanitizedQuoted = sanitizeSqlCredentials(quotedCredSql);
+  assert.ok(!sanitizedQuoted.includes('My Pass!@#1'), 'Quoted password with spaces/symbols should be redacted');
+  assert.equal(sanitizedQuoted, 'CREATE USER U1 IDENTIFIED BY "••••••••"');
+
   assert.equal(maskUsername('U1', true), 'U••1');
   assert.equal(maskUsername('U1', false), 'U1');
   assert.equal(maskHost('LAPTOP-R03ORTGV', true), 'LAP••••GV');
   assert.equal(maskCmnd('001206012345', true), '001••••••45');
+
+  const sensitiveText =
+    'User U1 from pc@LAPTOP-R03ORTGV (192.168.56.109) queried NV1, NV_TRAP with CMND 001206012345; CREATE USER U1 IDENTIFIED BY "My Pass!@#1"';
+  const redacted = redactSensitiveDetails(sensitiveText, true, ['U1', 'NV1', 'NV_TRAP']);
+  assert.ok(!redacted.includes('001206012345'), 'CMND should be masked in privacyMode');
+  assert.ok(redacted.includes('001••••••45'), 'Masked CMND format should appear');
+  assert.ok(!redacted.includes('192.168.56.109'), 'IPv4 should be masked in privacyMode');
+  assert.ok(redacted.includes('192.•••.•••.109'), 'Masked IPv4 format should appear');
+  assert.ok(!redacted.includes('pc@LAPTOP-R03ORTGV'), 'os@host should be masked in privacyMode');
+  assert.ok(!redacted.includes('My Pass!@#1'), 'Password should be scrubbed');
+  assert.ok(/\bU••1\b/.test(redacted), 'Known DB username U1 should be masked');
+  assert.ok(redacted.includes('NV1'), 'Employee ID NV1 must remain visible');
+  assert.ok(redacted.includes('NV_TRAP'), 'Employee ID NV_TRAP must remain visible');
+
+  const unmasked = redactSensitiveDetails(sensitiveText, false, ['U1']);
+  assert.ok(!unmasked.includes('My Pass!@#1'), 'Passwords must be scrubbed even when privacyMode=false');
+  assert.ok(unmasked.includes('001206012345'));
+  assert.ok(unmasked.includes('192.168.56.109'));
+  assert.ok(unmasked.includes('pc@LAPTOP-R03ORTGV'));
+  assert.ok(/\bU1\b/.test(unmasked));
 });
 
 test('evaluateOracleSqlBatch detects real Oracle SQL Developer commands from User_U1.sql', () => {
@@ -194,5 +261,110 @@ test('buildPdfReportModel and buildPdfBinaryFromJpegPages generate valid PDF 1.4
   assert.ok(pdfText.includes('/Type /Catalog'), 'PDF binary should contain Catalog object');
   assert.ok(pdfText.includes('/Filter /DCTDecode'), 'PDF binary should embed JPEG stream');
   assert.ok(pdfText.trim().endsWith('%%EOF'), 'PDF binary should end with %%EOF');
+});
+
+test('renderPdfReportPages redraws Alerts and Audit headers on multi-page breaks and clamps long audit context', () => {
+  const drawnTexts: string[] = [];
+  const fakeJpegBase64 = Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64');
+  const origDocument = (globalThis as Record<string, unknown>).document;
+
+  (globalThis as Record<string, unknown>).document = {
+    createElement: (tag: string) => {
+      assert.equal(tag, 'canvas');
+      return {
+        width: 0,
+        height: 0,
+        getContext: () => ({
+          fillStyle: '',
+          strokeStyle: '',
+          lineWidth: 1,
+          font: '',
+          fillRect: () => {},
+          strokeRect: () => {},
+          setLineDash: () => {},
+          fillText: (text: string) => {
+            drawnTexts.push(String(text));
+          },
+        }),
+        toDataURL: () => `data:image/jpeg;base64,${fakeJpegBase64}`,
+      };
+    },
+  };
+
+  try {
+    const manyAlerts = Array.from({ length: 40 }, (_, i) => ({
+      ...INITIAL_ALERTS[0],
+      key: `ALERT_PAGE_${i}`,
+      time: `2026-11-22 10:00:${String(i % 60).padStart(2, '0')}`,
+    }));
+    const longContextClient = 'VeryLongCustomOracleSqlClientProgramNameExceedingColumnWidth';
+    const manyAudits = Array.from({ length: 40 }, (_, i) => ({
+      ...INITIAL_AUDIT_LOGS[0],
+      EVENT_TIMESTAMP: `2026-11-22 10:01:${String(i % 60).padStart(2, '0')}`,
+      CLIENT_PROGRAM_NAME: i === 0 ? longContextClient : 'SQL Developer',
+      OS_USERNAME: i === 0 ? 'very_long_os_username_identifier' : 'pc',
+      USERHOST: i === 0 ? 'VERY-LONG-WORKSTATION-HOSTNAME-0123456789' : 'LAPTOP-R03ORTGV',
+    }));
+
+    const metrics = calculateSystemMetrics(
+      manyAudits.length,
+      manyAlerts.length,
+      1,
+      1,
+      INITIAL_USERS
+    );
+    const model = buildPdfReportModel(
+      {
+        metrics,
+        users: INITIAL_USERS,
+        alerts: manyAlerts,
+        auditLogs: manyAudits,
+      },
+      {
+        scope: 'full',
+        privacyMode: false,
+        reportCode: 'SOC-MULTIPAGE-TEST',
+      }
+    );
+
+    const { pageDataUrls, pdfBytes } = renderPdfReportPages(model);
+    assert.ok(pageDataUrls.length >= 4, `Expected multi-page PDF, got ${pageDataUrls.length} pages`);
+
+    const pdfText = new TextDecoder().decode(pdfBytes);
+    assert.ok(pdfText.startsWith('%PDF-1.4'));
+    assert.ok(pdfText.trim().endsWith('%%EOF'));
+
+    const alertsHeadersCount = drawnTexts.filter(
+      (t) => t === 'Loại Tấn công & Câu lệnh SQL Vi phạm'
+    ).length;
+    const auditHeadersCount = drawnTexts.filter(
+      (t) => t === 'Ngữ cảnh & Câu lệnh SQL (SQL_TEXT)'
+    ).length;
+    assert.ok(
+      alertsHeadersCount >= 2,
+      `Alerts table header should repeat after page break (saw ${alertsHeadersCount})`
+    );
+    assert.ok(
+      auditHeadersCount >= 2,
+      `Audit table header should repeat after page break (saw ${auditHeadersCount})`
+    );
+
+    assert.ok(
+      !drawnTexts.some((t) => t.includes(longContextClient + ' (very_long_os_username_identifier')),
+      'Long audit context must be clamped before overflowing column'
+    );
+    const clampedCtxDraw = drawnTexts.find((t) =>
+      t.startsWith(`Ngữ cảnh: ${longContextClient.slice(0, 39)}`)
+    );
+    assert.ok(clampedCtxDraw, 'Clamped audit context should end with ellipsis');
+    assert.ok(clampedCtxDraw.endsWith('...'));
+    assert.ok(clampedCtxDraw.length <= 52);
+  } finally {
+    if (origDocument === undefined) {
+      delete (globalThis as Record<string, unknown>).document;
+    } else {
+      (globalThis as Record<string, unknown>).document = origDocument;
+    }
+  }
 });
 

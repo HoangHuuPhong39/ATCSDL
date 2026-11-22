@@ -9,12 +9,13 @@ import {
 } from 'lucide-react';
 import { AlertItem, Severity } from '../../types/ids';
 import { classifyAlertGroup, computeAttackBreakdown, getRiskColorHex, AttackGroup } from '../../utils/analytics';
-import { maskUsername } from '../../utils/privacy';
+import { maskUsername, maskContextString, redactSensitiveDetails } from '../../utils/privacy';
 import { StatusDot } from '../ui/StatusDot';
 
 interface AlertsTabProps {
   alerts: AlertItem[];
   privacyMode?: boolean;
+  knownUsers?: string[];
   onOpenAlertModal: (alert: AlertItem) => void;
   onDismissAlert: (key: string) => void;
   onToggleReviewAlert: (key: string) => void;
@@ -28,6 +29,7 @@ interface AlertsTabProps {
 export const AlertsTab: React.FC<AlertsTabProps> = ({
   alerts,
   privacyMode = false,
+  knownUsers = [],
   onOpenAlertModal,
   onDismissAlert,
   onToggleReviewAlert,
@@ -53,14 +55,20 @@ export const AlertsTab: React.FC<AlertsTabProps> = ({
       if (filterReview === 'REVIEWED' && !a.reviewed) return false;
       if (!searchTerm) return true;
       const term = searchTerm.toLowerCase();
+      const displayUser = maskUsername(a.user, privacyMode).toLowerCase();
+      const displayDetails = redactSensitiveDetails(a.details, privacyMode, knownUsers).toLowerCase();
+      const displayContext = maskContextString(a.context, privacyMode).toLowerCase();
       return (
-        a.user.toLowerCase().includes(term) ||
-        a.attack_type.toLowerCase().includes(term) ||
-        a.details.toLowerCase().includes(term) ||
-        a.context.toLowerCase().includes(term)
+        (a.user || '').toLowerCase().includes(term) ||
+        displayUser.includes(term) ||
+        (a.attack_type || '').toLowerCase().includes(term) ||
+        (a.details || '').toLowerCase().includes(term) ||
+        displayDetails.includes(term) ||
+        (a.context || '').toLowerCase().includes(term) ||
+        displayContext.includes(term)
       );
     });
-  }, [alerts, filterSeverity, filterGroup, filterReview, searchTerm]);
+  }, [alerts, filterSeverity, filterGroup, filterReview, searchTerm, privacyMode, knownUsers]);
 
   return (
     <div className="space-y-4">
@@ -126,6 +134,7 @@ export const AlertsTab: React.FC<AlertsTabProps> = ({
             <option value="CRITICAL">Critical</option>
             <option value="HIGH">High</option>
             <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
           </select>
 
           {/* Search box */}
@@ -230,6 +239,7 @@ export const AlertsTab: React.FC<AlertsTabProps> = ({
                   const color = getRiskColorHex(a.risk_score);
                   const isCritical = a.risk_score >= 80;
                   const isHigh = a.risk_score >= 50 && a.risk_score < 80;
+                  const redactedDetails = redactSensitiveDetails(a.details, privacyMode, knownUsers);
 
                   return (
                     <tr
@@ -275,8 +285,8 @@ export const AlertsTab: React.FC<AlertsTabProps> = ({
 
                       {/* 5. SQL Text (Truncated to 1 line) */}
                       <td className="py-2.5 px-3.5 max-w-[280px]">
-                        <span className="soc-sql-chip truncate block" title={a.details}>
-                          {a.details}
+                        <span className="soc-sql-chip truncate block" title={redactedDetails}>
+                          {redactedDetails}
                         </span>
                       </td>
 

@@ -9,15 +9,17 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
-import { FgaEvent } from '../../types/ids';
-import { maskUsername } from '../../utils/privacy';
+import { FgaEvent, getFgaKey } from '../../types/ids';
+import { maskUsername, redactSensitiveDetails } from '../../utils/privacy';
 
 interface FgaTabProps {
   fgaEvents: FgaEvent[];
-  onToggleReviewFga: (index: number) => void;
+  privacyMode?: boolean;
+  knownUsers?: string[];
+  onToggleReviewFga: (fgaKey: string) => void;
   onMarkAllFgaReviewed: () => void;
   onResetReviewedFga: () => void;
-  onClearSingleFga: (index: number) => void;
+  onClearSingleFga: (fgaKey: string) => void;
   onClearAllFga: () => void;
   onOpenOracleBridge?: () => void;
   onOpenFgaModal?: (event: FgaEvent) => void;
@@ -25,6 +27,8 @@ interface FgaTabProps {
 
 export const FgaTab: React.FC<FgaTabProps> = ({
   fgaEvents,
+  privacyMode = false,
+  knownUsers = [],
   onToggleReviewFga,
   onMarkAllFgaReviewed,
   onResetReviewedFga,
@@ -92,11 +96,11 @@ export const FgaTab: React.FC<FgaTabProps> = ({
             </button>
           </div>
           <p className="text-xs text-[var(--text-3)] mt-1.5 truncate">
-            Giám sát truy vấn cột nhạy cảm <code className="text-[var(--accent)] font-mono">LUONG, CMND</code> khi <code className="text-[var(--accent)] font-mono font-semibold">LUONG &gt;= 1000</code>.
+            Giám sát truy vấn cột nhạy cảm <code className="text-[var(--accent)] font-mono">LUONG, CMND</code> trên toàn bộ nhân viên (<code className="text-[var(--accent)] font-mono font-semibold">audit_condition =&gt; NULL</code>).
           </p>
           {showCode2 && (
             <div className="mt-2.5 bg-[var(--surface-hover)] p-2 rounded-lg border border-[var(--line)] font-mono text-xs text-[var(--accent)] break-all select-all">
-              DBMS_FGA.ADD_POLICY(object_name=&gt;&apos;NV&apos;, policy_name=&gt;&apos;FGA_HIGH_SALARY_ACCESS&apos;, audit_condition=&gt;&apos;luong&gt;=1000&apos;, audit_column=&gt;&apos;LUONG, CMND&apos;);
+              DBMS_FGA.ADD_POLICY(object_schema=&gt;&apos;SYSTEM&apos;, object_name=&gt;&apos;NV&apos;, policy_name=&gt;&apos;FGA_HIGH_SALARY_ACCESS&apos;, audit_condition=&gt;NULL, audit_column=&gt;&apos;LUONG, CMND&apos;, audit_column_opts=&gt;DBMS_FGA.ANY_COLUMNS);
             </div>
           )}
         </div>
@@ -196,10 +200,12 @@ export const FgaTab: React.FC<FgaTabProps> = ({
               </thead>
               <tbody className="divide-y divide-[var(--line)]">
                 {fgaEvents.map((e, idx) => {
+                  const key = getFgaKey(e);
                   const isTrap = String(e.FGA_POLICY_NAME || '').includes('HONEYTOKEN') || String(e.SQL_TEXT || '').includes('NV_TRAP');
+                  const redactedSql = redactSensitiveDetails(e.SQL_TEXT, privacyMode, knownUsers);
                   return (
                     <tr
-                      key={`${e.EVENT_TIMESTAMP}-${e.DBUSERNAME}-${idx}`}
+                      key={`${key}-${idx}`}
                       onClick={() => onOpenFgaModal && onOpenFgaModal(e)}
                       className={`hover:bg-[var(--surface-hover)] transition-colors cursor-pointer group ${
                         isTrap ? 'bg-[var(--danger-soft)]/20' : ''
@@ -209,7 +215,7 @@ export const FgaTab: React.FC<FgaTabProps> = ({
                       <td className="py-2.5 px-3.5 text-center" onClick={(ev) => ev.stopPropagation()}>
                         <button
                           type="button"
-                          onClick={() => onToggleReviewFga(idx)}
+                          onClick={() => onToggleReviewFga(key)}
                           aria-label={e.reviewed ? 'Bỏ đánh dấu đã duyệt' : 'Đánh dấu đã duyệt'}
                           className={`w-6 h-6 rounded flex items-center justify-center transition-colors cursor-pointer focus-visible:ring mx-auto ${
                             e.reviewed
@@ -228,7 +234,7 @@ export const FgaTab: React.FC<FgaTabProps> = ({
 
                       {/* User */}
                       <td className="py-2.5 px-3.5 font-mono font-semibold text-[var(--text-1)] whitespace-nowrap">
-                        {maskUsername(e.DBUSERNAME)}
+                        {maskUsername(e.DBUSERNAME, privacyMode)}
                       </td>
 
                       {/* Policy Name */}
@@ -240,8 +246,8 @@ export const FgaTab: React.FC<FgaTabProps> = ({
 
                       {/* SQL (Truncated) */}
                       <td className="py-2.5 px-3.5 max-w-[320px]">
-                        <span className="soc-sql-chip truncate block" title={e.SQL_TEXT}>
-                          {e.SQL_TEXT}
+                        <span className="soc-sql-chip truncate block" title={redactedSql}>
+                          {redactedSql}
                         </span>
                       </td>
 
@@ -261,7 +267,7 @@ export const FgaTab: React.FC<FgaTabProps> = ({
                           )}
                           <button
                             type="button"
-                            onClick={() => onClearSingleFga(idx)}
+                            onClick={() => onClearSingleFga(key)}
                             className="w-7 h-7 rounded flex items-center justify-center text-[var(--text-3)] hover:text-[var(--danger)] hover:bg-[var(--danger-soft)] transition-colors cursor-pointer focus-visible:ring"
                             title="Xóa sự kiện này"
                             aria-label="Xóa sự kiện FGA"
